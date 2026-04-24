@@ -20,7 +20,10 @@ def main() -> None:
     workers = build_workers()
     generator = ClientLoadGenerator()
     load_balancer = RoundRobinLoadBalancer(workers)
-    retriever = RAGRetriever()
+    # use_stub=True keeps the dry-run sub-second by skipping the FAISS model download.
+    # Scripts that exercise real vector retrieval should instantiate RAGRetriever()
+    # with the default arguments.
+    retriever = RAGRetriever(use_stub=True)
     inference_engine = LLMInferenceEngine()
     scheduler = MasterScheduler(retriever, inference_engine)
 
