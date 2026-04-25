@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from client import ClientLoadGenerator  # noqa: E402
-from lb import RoundRobinLoadBalancer  # noqa: E402
+from lb import LoadBalancer, LoadBalancingStrategy  # noqa: E402
 from llm import LLMInferenceEngine, SimulatedLLMBackend  # noqa: E402
 from master import MasterScheduler  # noqa: E402
 from rag import RAGRetriever  # noqa: E402
@@ -52,10 +52,11 @@ def run(
     failure_rate: float,
     fault_after: int | None,
     use_stub_rag: bool,
+    strategy: LoadBalancingStrategy,
 ) -> int:
     workers = build_workers(failure_rate=failure_rate)
     generator = ClientLoadGenerator()
-    load_balancer = RoundRobinLoadBalancer(workers)
+    load_balancer = LoadBalancer(workers, strategy=strategy)
     retriever = RAGRetriever(use_stub=use_stub_rag)
     inference_engine = LLMInferenceEngine(
         backend=SimulatedLLMBackend(
@@ -157,6 +158,12 @@ def main() -> int:
             "Triggers a one-time sentence-transformers model download."
         ),
     )
+    parser.add_argument(
+        "--strategy",
+        choices=[s.value for s in LoadBalancingStrategy],
+        default=LoadBalancingStrategy.LEAST_CONNECTIONS.value,
+        help="Load-balancing strategy used by the LoadBalancer.",
+    )
     args = parser.parse_args()
 
     # Favour the simulated LLM here; the smoke test is about load balancing, not generation quality.
@@ -166,6 +173,7 @@ def main() -> int:
         failure_rate=args.failure_rate,
         fault_after=args.fault_after,
         use_stub_rag=not args.real_rag,
+        strategy=LoadBalancingStrategy(args.strategy),
     )
 
 
