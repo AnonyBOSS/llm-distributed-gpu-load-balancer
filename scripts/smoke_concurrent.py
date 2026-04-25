@@ -53,19 +53,25 @@ def run(
     fault_after: int | None,
     use_stub_rag: bool,
     strategy: LoadBalancingStrategy,
+    real_llm: bool,
 ) -> int:
     workers = build_workers(failure_rate=failure_rate)
     generator = ClientLoadGenerator()
     load_balancer = LoadBalancer(workers, strategy=strategy)
     retriever = RAGRetriever(use_stub=use_stub_rag)
-    inference_engine = LLMInferenceEngine(
-        backend=SimulatedLLMBackend(
-            base_latency_s=0.05,
-            per_token_latency_s=0.001,
-            jitter_s=0.02,
-            rng_seed=42,
+    if real_llm:
+        # Defers to LLM_BACKEND env var (set to "hf" by --real-llm).
+        # Loads the HuggingFace model once on first call.
+        inference_engine = LLMInferenceEngine()
+    else:
+        inference_engine = LLMInferenceEngine(
+            backend=SimulatedLLMBackend(
+                base_latency_s=0.05,
+                per_token_latency_s=0.001,
+                jitter_s=0.02,
+                rng_seed=42,
+            )
         )
-    )
     scheduler = MasterScheduler(retriever, inference_engine, workers=workers, max_retries=2)
 
     requests = generator.generate_requests(count=num_users)
@@ -164,16 +170,28 @@ def main() -> int:
         default=LoadBalancingStrategy.LEAST_CONNECTIONS.value,
         help="Load-balancing strategy used by the LoadBalancer.",
     )
+    parser.add_argument(
+        "--real-llm",
+        action="store_true",
+        help=(
+            "Use the HuggingFace LLM backend (sets LLM_BACKEND=hf). "
+            "Requires `pip install transformers torch`. Much slower than the simulated backend."
+        ),
+    )
     args = parser.parse_args()
 
-    # Favour the simulated LLM here; the smoke test is about load balancing, not generation quality.
-    os.environ.setdefault("LLM_BACKEND", "sim")
+    if args.real_llm:
+        os.environ["LLM_BACKEND"] = "hf"
+    else:
+        os.environ.setdefault("LLM_BACKEND", "sim")
+
     return run(
         num_users=args.users,
         failure_rate=args.failure_rate,
         fault_after=args.fault_after,
         use_stub_rag=not args.real_rag,
         strategy=LoadBalancingStrategy(args.strategy),
+        real_llm=args.real_llm,
     )
 
 
