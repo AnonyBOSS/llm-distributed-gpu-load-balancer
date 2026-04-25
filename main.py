@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from client import ClientLoadGenerator
-from lb import RoundRobinLoadBalancer
+from lb import LoadBalancer, LoadBalancingStrategy
 from llm import LLMInferenceEngine
 from master import MasterScheduler
 from rag import RAGRetriever
@@ -19,7 +19,10 @@ def build_workers() -> list[GPUWorkerNode]:
 def main() -> None:
     workers = build_workers()
     generator = ClientLoadGenerator()
-    load_balancer = RoundRobinLoadBalancer(workers)
+    load_balancer = LoadBalancer(
+    workers,
+    strategy=LoadBalancingStrategy.LOAD_AWARE,
+)
     # use_stub=True keeps the dry-run sub-second by skipping the FAISS model download.
     # Scripts that exercise real vector retrieval should instantiate RAGRetriever()
     # with the default arguments.
