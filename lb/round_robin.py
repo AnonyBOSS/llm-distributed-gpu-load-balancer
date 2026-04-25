@@ -9,7 +9,6 @@ class LoadBalancingStrategy(str, Enum):
     LEAST_CONNECTIONS = "least_connections"
     LOAD_AWARE = "load_aware"
 
-
 class LoadBalancer:
     def __init__(
         self,
