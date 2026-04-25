@@ -1,1 +1,1 @@
-from .round_robin import RoundRobinLoadBalancer
+from .round_robin import LoadBalancer, LoadBalancingStrategy
