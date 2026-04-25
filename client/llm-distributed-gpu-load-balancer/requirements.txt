@@ -1,0 +1,9 @@
+# Core dependencies for the RAG retriever (vector search over an in-memory corpus).
+sentence-transformers>=2.7
+faiss-cpu>=1.8
+numpy>=1.26
+
+# Optional: real LLM backend. Enable with the environment variable LLM_BACKEND=hf.
+# The simulated backend is the default and has no external dependencies.
+# transformers>=4.40
+# torch>=2.2
