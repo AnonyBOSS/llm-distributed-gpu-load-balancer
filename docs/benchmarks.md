@@ -30,6 +30,21 @@ python scripts/benchmark.py
 ## Headline numbers
 
 See [benchmarks/results.csv](../benchmarks/results.csv) for the full table.
+Run on a single Windows host via Docker Desktop (8 containers, single
+docker bridge network). Numbers will differ on Linux native; the *shape*
+of the curves should match.
+
+| Strategy            | 100 users (rps) | 1000 users (rps) | 1000-user p99 (ms) | Errors @ 1000 |
+|---------------------|----------------:|-----------------:|-------------------:|--------------:|
+| `round_robin`       | 136             | 394              | 2745               | 3 / 1000      |
+| `least_connections` | 153             | **416**          | **2594**           | **1 / 1000**  |
+| `load_aware`        | 147             | 391              | 2800               | 3 / 1000      |
+
+**Fault-injection run** (250 users, `load_aware`, worker-2 stopped after 80 completed responses, restarted after the run finishes): **250 / 250 ok, zero dropped requests**, 84/84/82 final per-worker distribution including the failed-then-recovered worker. The active health monitor flipped worker-2 `FAILED` within ~3 s of the kill and revived it within ~5 s of the restart.
+
+**Total across the suite:** 4 000 requests, 7 errors → **0.18 % error rate**. The errors are concentrated at the 1000-user level where the system briefly saturates (3 workers × 8 concurrent slots = 24 in-flight ⇒ ~120 requests queued at peak); none of them are routing or fault-tolerance bugs.
+
+**Strategy verdict:** `least_connections` wins by a small margin in this configuration — slightly higher peak throughput, marginally lower p99, fewest saturation errors. `round_robin` is statistically tied because the workers are homogeneous; the `load_aware` ratio doesn't pay off until per-worker capacity differs. With heterogeneous worker pools (different `MAX_CONCURRENT_TASKS` per worker), `load_aware` should pull ahead.
 
 ## Charts
 
