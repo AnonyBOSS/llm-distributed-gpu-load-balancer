@@ -3,7 +3,14 @@ sentence-transformers>=2.7
 faiss-cpu>=1.8
 numpy>=1.26
 
+# pydantic is a transitive dep of sentence-transformers but we use it directly
+# for HTTP wire models in common/wire.py.
+pydantic>=2.6
+
 # Optional: real LLM backend. Enable with the environment variable LLM_BACKEND=hf.
 # The simulated backend is the default and has no external dependencies.
 # transformers>=4.40
 # torch>=2.2
+
+# For the FastAPI services and docker-compose stack, additionally install:
+#   pip install -r requirements-services.txt

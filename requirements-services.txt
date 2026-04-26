@@ -1,0 +1,9 @@
+# Additional dependencies required only when running the FastAPI services
+# (services/worker_service.py, services/master_service.py, services/lb_service.py)
+# or the docker-compose stack under deploy/. The in-process simulation in
+# main.py / scripts/smoke_concurrent.py does not need any of these.
+
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.27
+pydantic>=2.6

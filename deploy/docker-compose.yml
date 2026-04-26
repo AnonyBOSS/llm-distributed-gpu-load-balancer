@@ -1,0 +1,131 @@
+# Compose stack for the distributed LLM load-balancer.
+#
+# Topology:
+#     client  →  nginx (8080)  →  lb (7000)  →  master (9000)  →  worker-{1,2,3} (8000)
+#
+# Bring up:
+#     docker compose -f deploy/docker-compose.yml up --build
+#
+# Smoke test once it's up:
+#     curl -X POST http://localhost:8080/request \
+#          -H 'Content-Type: application/json' \
+#          -d '{"request_id":"r1","user_id":"u1","prompt":"hello","metadata":{}}'
+
+services:
+
+  worker-1:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: cse354-llm-svc:latest
+    command: uvicorn services.worker_service:app --host 0.0.0.0 --port 8000
+    environment:
+      WORKER_ID: gpu-worker-1
+      GPU_NAME: NVIDIA-A100-SIM
+      MAX_CONCURRENT_TASKS: "8"
+      FAILURE_RATE: "0.0"
+      LLM_BACKEND: sim
+      THREADPOOL_TOKENS: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  worker-2:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: cse354-llm-svc:latest
+    command: uvicorn services.worker_service:app --host 0.0.0.0 --port 8000
+    environment:
+      WORKER_ID: gpu-worker-2
+      GPU_NAME: NVIDIA-A100-SIM
+      MAX_CONCURRENT_TASKS: "8"
+      FAILURE_RATE: "0.0"
+      LLM_BACKEND: sim
+      THREADPOOL_TOKENS: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  worker-3:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: cse354-llm-svc:latest
+    command: uvicorn services.worker_service:app --host 0.0.0.0 --port 8000
+    environment:
+      WORKER_ID: gpu-worker-3
+      GPU_NAME: NVIDIA-A100-SIM
+      MAX_CONCURRENT_TASKS: "8"
+      FAILURE_RATE: "0.0"
+      LLM_BACKEND: sim
+      THREADPOOL_TOKENS: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  master:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: cse354-llm-svc:latest
+    command: uvicorn services.master_service:app --host 0.0.0.0 --port 9000
+    environment:
+      WORKER_URLS: "http://worker-1:8000,http://worker-2:8000,http://worker-3:8000"
+      WORKER_IDS:  "gpu-worker-1,gpu-worker-2,gpu-worker-3"
+      LB_STRATEGY: load_aware
+      MAX_CONCURRENT_TASKS: "8"
+      MAX_RETRIES: "1"
+      RAG_USE_STUB: "true"
+      RAG_TOP_K: "3"
+      THREADPOOL_TOKENS: "1000"
+      WORKER_HTTP_TIMEOUT_SEC: "30"
+    depends_on:
+      worker-1:
+        condition: service_healthy
+      worker-2:
+        condition: service_healthy
+      worker-3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  lb:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: cse354-llm-svc:latest
+    command: uvicorn services.lb_service:app --host 0.0.0.0 --port 7000
+    environment:
+      MASTER_URLS: "http://master:9000"
+      LB_STRATEGY: round_robin
+      MASTER_MAX_INFLIGHT: "100"
+      MASTER_HTTP_TIMEOUT_SEC: "60"
+      THREADPOOL_TOKENS: "1000"
+    depends_on:
+      master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      lb:
+        condition: service_healthy

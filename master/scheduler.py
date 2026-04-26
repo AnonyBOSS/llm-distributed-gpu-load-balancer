@@ -90,6 +90,11 @@ class MasterScheduler:
                 status="failed",
             )
         finally:
+            # If the caller pre-reserved a worker via LoadBalancer.select_worker(),
+            # release that handoff reservation now. Per-attempt reserve/release
+            # inside _process_with_retry handles its own bookkeeping.
+            if worker is not None:
+                worker.release()
             self._stats.total_processing_time_seconds += perf_counter() - start_time
 
     def _resolve_candidate_workers(
@@ -111,7 +116,9 @@ class MasterScheduler:
         self,
         workers: Sequence[GPUWorkerNode],
     ) -> list[GPUWorkerNode]:
-        return sorted(workers, key=lambda node: node.active_tasks)
+        # Use pending_tasks (reservations) so concurrent picks stay balanced
+        # even before active_tasks moves.
+        return sorted(workers, key=lambda node: node.pending_tasks)
 
     def _process_with_retry(
         self,
@@ -128,6 +135,7 @@ class MasterScheduler:
                 f"{worker.worker_id} (attempt {attempt}/{max_attempts})"
             )
 
+            worker.reserve()
             try:
                 answer = worker.process(request, context, self._inference_engine)
                 self._worker_successes[worker.worker_id] = (
@@ -143,6 +151,8 @@ class MasterScheduler:
                     f"[master] Worker {worker.worker_id} failed for "
                     f"{request.request_id}: {exc}"
                 )
+            finally:
+                worker.release()
 
         assert last_error is not None
         raise RuntimeError(

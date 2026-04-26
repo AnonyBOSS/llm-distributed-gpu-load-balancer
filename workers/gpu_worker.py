@@ -42,8 +42,12 @@ class GPUWorkerNode:
         self.max_concurrent_tasks = max_concurrent_tasks
         self.failure_rate = failure_rate
 
-        # Counters (read unsynchronised by the scheduler for least-busy routing).
+        # active_tasks: requests currently inside process()
+        # pending_tasks: requests reserved by the LB but not yet finished. Used
+        # for selection because reading active_tasks under racing select_worker()
+        # callers all see 0 and pick the same node (thundering herd).
         self.active_tasks = 0
+        self.pending_tasks = 0
         self.completed_tasks = 0
         self.failed_tasks = 0
         self.total_latency_seconds = 0.0
@@ -52,6 +56,14 @@ class GPUWorkerNode:
 
         self._lock = threading.Lock()
         self._rng = random.Random(rng_seed)
+
+    def reserve(self) -> None:
+        with self._lock:
+            self.pending_tasks += 1
+
+    def release(self) -> None:
+        with self._lock:
+            self.pending_tasks = max(0, self.pending_tasks - 1)
 
     def mark_failed(self) -> None:
         with self._lock:
@@ -76,6 +88,7 @@ class GPUWorkerNode:
                 "gpu_name": self.gpu_name,
                 "status": self.status.value,
                 "active_tasks": self.active_tasks,
+                "pending_tasks": self.pending_tasks,
                 "max_concurrent_tasks": self.max_concurrent_tasks,
                 "completed_tasks": self.completed_tasks,
                 "failed_tasks": self.failed_tasks,
