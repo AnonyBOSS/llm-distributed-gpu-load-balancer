@@ -44,6 +44,17 @@ class LoadBalancer:
     def strategy(self) -> LoadBalancingStrategy:
         return self._strategy
 
+    def set_strategy(self, strategy: LoadBalancingStrategy) -> None:
+        """Atomically switch the routing strategy at runtime.
+
+        Used by the benchmark harness to compare strategies back-to-back
+        without restarting the master process. Resets the round-robin
+        cursor so a switch into ROUND_ROBIN starts at worker 0.
+        """
+        with self._lock:
+            self._strategy = strategy
+            self._next_index = 0
+
     def select_worker(self, request: Request) -> GPUWorkerNode:
         with self._lock:
             available = [w for w in self._workers if w.status != WorkerStatus.FAILED]

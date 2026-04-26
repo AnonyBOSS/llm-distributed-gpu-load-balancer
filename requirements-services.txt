@@ -8,3 +8,7 @@ uvicorn[standard]>=0.27
 httpx>=0.27
 pydantic>=2.6
 prometheus_client>=0.20
+
+# matplotlib is only used by scripts/benchmark.py for chart rendering;
+# it has no runtime impact on the services themselves.
+matplotlib>=3.8

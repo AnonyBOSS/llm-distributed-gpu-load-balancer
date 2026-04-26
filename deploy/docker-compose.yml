@@ -76,6 +76,10 @@ services:
       dockerfile: deploy/Dockerfile
     image: cse354-llm-svc:latest
     command: uvicorn services.master_service:app --host 0.0.0.0 --port 9000
+    ports:
+      # Exposed to the host so scripts/benchmark.py can call /admin/strategy
+      # and so an operator can curl /workers or /metrics directly.
+      - "9000:9000"
     environment:
       WORKER_URLS: "http://worker-1:8000,http://worker-2:8000,http://worker-3:8000"
       WORKER_IDS:  "gpu-worker-1,gpu-worker-2,gpu-worker-3"

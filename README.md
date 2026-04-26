@@ -15,25 +15,76 @@ The project models a distributed AI serving platform that accepts many simultane
 
 ## Current Status
 
-The repository now contains a full single-process simulation of the system. Every component described in the assignment is implemented to the point where it can be exercised end to end on a laptop, and the AI pipeline is ready to be plugged into a real model when GPU hardware is available.
+The repository runs as a real distributed system: each component is its own
+FastAPI process in its own Docker container, with active health monitoring,
+Prometheus + Grafana observability, a pytest CI suite, and a benchmark
+harness that drives the full 100→1000 user ramp across all three LB
+strategies plus a fault-injection scenario.
+
+The single-process simulation (`main.py`, `scripts/smoke_concurrent.py`)
+is preserved for fast local iteration and is what the unit tests target.
+
+### Quickstart (distributed mode)
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+curl -X POST http://localhost:8080/request \
+     -H 'Content-Type: application/json' \
+     -d '{"request_id":"r1","user_id":"u1","prompt":"hello","metadata":{}}'
+```
+
+Open the live dashboard at <http://localhost:3000/d/cse354-overview> (no login).
+
+To run the full benchmark suite (~10 minutes; 12 ramp runs + 1 fault run,
+charts saved to `benchmarks/charts/`):
+
+```bash
+python scripts/benchmark.py
+# or: python scripts/benchmark.py --quick
+```
+
+### Topology
+
+```
+client → nginx (8080) → lb (7000) → master (9000) → worker-{1,2,3} (8000)
+                                        │                   ▲
+                                        │  health probes    │
+                                        └───────────────────┘
+                            ↓
+                   prometheus (9090) ──→ grafana (3000)
+```
+
+- Three GPU workers, each its own process with its own `LLMInferenceEngine`.
+- One master orchestrating RAG + worker selection + per-request retry.
+- One LB tier (extensible to N masters).
+- One nginx upstream (matching the brief's "Load Balancing Tools: NGINX" requirement).
+- Prometheus scrapes every service every 5 s; Grafana auto-loads the dashboard.
+
+See [docs/architecture.md](docs/architecture.md) for the full request flow,
+failure-recovery model, and concurrency story.
 
 ### Implemented
 
 - shared `Request`/`Response` data models in `common`
-- a configurable `LoadBalancer` in `lb` with three strategies: round-robin, least-connections, and load-aware
+- Pydantic wire models in [common/wire.py](common/wire.py) for HTTP serialisation
+- a configurable `LoadBalancer` in `lb` with three strategies: round-robin, least-connections, and load-aware, with a lock + reservation counter that fixes a real thundering-herd bug discovered during smoke testing
 - a `MasterScheduler` in `master` that drives the RAG step, dispatches work to workers, and retries on failure
+- an active `HealthMonitor` in [master/health_monitor.py](master/health_monitor.py) that polls every worker every 1 s and auto-flips them FAILED/HEALTHY with a 3-strike circuit breaker
 - thread-safe `GPUWorkerNode` instances in `workers` with capacity, health states, latency tracking, completion counters, and injectable failures
+- a `RemoteWorkerProxy` in [workers/remote_proxy.py](workers/remote_proxy.py) that duck-types as `GPUWorkerNode` and speaks HTTP, so the LB and scheduler work over the network unchanged
 - an `LLMInferenceEngine` in `llm` with a default simulated backend and an optional HuggingFace backend selectable via an environment variable
-- a real `RAGRetriever` in `rag` backed by `sentence-transformers` and FAISS over an in-memory document corpus, with a fast deterministic stub for the dry run
-- a synthetic client load generator in `client`
-- a deterministic `python main.py` dry run
-- a 50-thread concurrency smoke test in `scripts/smoke_concurrent.py`
+- a real `RAGRetriever` in `rag` backed by `sentence-transformers` and FAISS, with a fast deterministic stub
+- FastAPI services in [services/](services/) for worker, master, and LB tiers, each exposing `/health` and Prometheus `/metrics`
+- Prometheus + Grafana stack pre-provisioned in [deploy/](deploy/) with a dashboard for throughput, p50/p95/p99 latency, per-worker utilisation, and live worker status
+- 36 unit tests + 4 integration tests in [tests/](tests/) covering the herd regression, scheduler retry/fallover, monitor circuit breaker, RAG, and the live compose stack
+- GitHub Actions CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) running unit tests on push and integration tests on PRs
+- benchmark harness in [scripts/benchmark.py](scripts/benchmark.py) running 100→1000 ramps × 3 strategies × clean/fault, saving CSV + chart PNGs
 
-### Not yet implemented
+### Documentation
 
-- distributed networking (the system runs in a single process, exactly like the project skeleton)
-- the full 1000+ user load run with batched reporting (the harness is ready; the client team owns scheduling that volume)
-- pluggable observability sinks (counters are exposed in-process; nothing is exported)
+- [docs/architecture.md](docs/architecture.md) — components, request flow, failure recovery, concurrency model
+- [docs/benchmarks.md](docs/benchmarks.md) — methodology, headline numbers, charts
+- [benchmarks/results.csv](benchmarks/results.csv) — raw aggregated benchmark table
 
 ## System Architecture
 

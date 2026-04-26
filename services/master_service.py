@@ -230,6 +230,25 @@ def workers_endpoint() -> list[dict[str, object]]:
     return [p.snapshot_metrics() for p in proxies]
 
 
+@app.post("/admin/strategy")
+def admin_strategy(payload: dict) -> dict[str, str]:
+    """Switch the LB strategy at runtime. Used by scripts/benchmark.py to
+    A/B compare strategies without restarting the master process."""
+    if load_balancer is None:
+        raise HTTPException(status_code=503, detail="master not initialised")
+    name = str(payload.get("strategy", "")).strip().lower()
+    try:
+        strategy = LoadBalancingStrategy(name)
+    except ValueError as exc:
+        valid = [s.value for s in LoadBalancingStrategy]
+        raise HTTPException(
+            status_code=400,
+            detail=f"strategy={name!r} invalid. Valid: {valid}",
+        ) from exc
+    load_balancer.set_strategy(strategy)
+    return {"strategy": strategy.value}
+
+
 @app.post("/request", response_model=ResponsePayload)
 def handle_request(payload: RequestPayload) -> ResponsePayload:
     if scheduler is None or load_balancer is None:

@@ -16,3 +16,7 @@ ENV/
 build/
 dist/
 *.egg-info/
+
+# Benchmark raw data per run is too large/noisy to commit; only the
+# aggregated CSV + chart PNGs go in.
+benchmarks/raw/
