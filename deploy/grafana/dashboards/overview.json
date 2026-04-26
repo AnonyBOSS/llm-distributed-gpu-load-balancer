@@ -1,0 +1,86 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum by (target) (rate(requests_total{service=~\"worker:.*\",status=\"ok\"}[1m]))", "legendFormat": "{{target}}", "refId": "A"}
+      ],
+      "title": "Throughput per worker (req/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum by (le, target) (rate(request_latency_seconds_bucket{service=~\"worker:.*\"}[1m])))", "legendFormat": "p50 {{target}}", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum by (le, target) (rate(request_latency_seconds_bucket{service=~\"worker:.*\"}[1m])))", "legendFormat": "p95 {{target}}", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum by (le, target) (rate(request_latency_seconds_bucket{service=~\"worker:.*\"}[1m])))", "legendFormat": "p99 {{target}}", "refId": "C"}
+      ],
+      "title": "Latency percentiles (worker tier)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "target_active_tasks{service=\"master\"}", "legendFormat": "{{target}} active", "refId": "A"},
+        {"expr": "target_pending_tasks{service=\"master\"}", "legendFormat": "{{target}} pending", "refId": "B"}
+      ],
+      "title": "Per-worker utilisation (master view)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 2}]}, "mappings": [{"type": "value", "options": {"0": {"text": "HEALTHY", "color": "green"}, "1": {"text": "DEGRADED", "color": "yellow"}, "2": {"text": "FAILED", "color": "red"}}}]}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "textMode": "value_and_name"},
+      "targets": [
+        {"expr": "target_status{service=\"master\"}", "legendFormat": "{{target}}", "refId": "A"}
+      ],
+      "title": "Worker status (master view)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 5,
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum by (status) (rate(requests_total{service=\"lb\"}[1m]))", "legendFormat": "lb {{status}}", "refId": "A"},
+        {"expr": "sum by (status) (rate(requests_total{service=\"master\"}[1m]))", "legendFormat": "master {{status}}", "refId": "B"}
+      ],
+      "title": "Edge throughput by status (LB + master)",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["cse354", "llm", "load-balancer"],
+  "templating": {"list": []},
+  "time": {"from": "now-15m", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "CSE354 — Distributed LLM Cluster",
+  "uid": "cse354-overview",
+  "version": 1,
+  "weekStart": ""
+}

@@ -1,0 +1,25 @@
+# Prometheus scrape configuration for the compose stack.
+# Scrapes every service every 5 s; Grafana queries Prometheus, not the
+# services directly.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: workers
+    static_configs:
+      - targets:
+          - worker-1:8000
+          - worker-2:8000
+          - worker-3:8000
+
+  - job_name: master
+    static_configs:
+      - targets:
+          - master:9000
+
+  - job_name: lb
+    static_configs:
+      - targets:
+          - lb:7000

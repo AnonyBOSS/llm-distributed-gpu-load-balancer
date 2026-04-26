@@ -27,6 +27,7 @@ from time import perf_counter
 import anyio
 from fastapi import FastAPI, HTTPException
 
+from common.metrics import MetricsBundle
 from common.wire import (
     ProcessRequest,
     ProcessResponse,
@@ -71,6 +72,7 @@ worker = GPUWorkerNode(
     failure_rate=FAILURE_RATE,
 )
 engine = LLMInferenceEngine()
+metrics_bundle = MetricsBundle(service=f"worker:{WORKER_ID}")
 
 
 @app.on_event("startup")
@@ -92,21 +94,37 @@ def root() -> dict[str, str]:
 
 @app.get("/health", response_model=WorkerHealth)
 def health() -> dict[str, object]:
-    return worker.snapshot_metrics()
+    snap = worker.snapshot_metrics()
+    metrics_bundle.update_target_state(
+        target=WORKER_ID,
+        status=str(snap["status"]),
+        active_tasks=int(snap["active_tasks"]),
+        pending_tasks=int(snap["pending_tasks"]),
+    )
+    return snap
 
 
-@app.get("/metrics", response_model=WorkerHealth)
-def metrics() -> dict[str, object]:
-    return worker.snapshot_metrics()
+@app.get("/metrics")
+def metrics():
+    # Refresh gauges from the live worker snapshot before scraping so the
+    # pulled values are always current, not just the last /process update.
+    snap = worker.snapshot_metrics()
+    metrics_bundle.update_target_state(
+        target=WORKER_ID,
+        status=str(snap["status"]),
+        active_tasks=int(snap["active_tasks"]),
+        pending_tasks=int(snap["pending_tasks"]),
+    )
+    return metrics_bundle.handler()
 
 
 @app.post("/process", response_model=ProcessResponse)
 def process(payload: ProcessRequest) -> ProcessResponse:
     request = payload.request.to_dataclass()
-    from time import perf_counter
     start = perf_counter()
     try:
-        answer = worker.process(request, payload.context, engine)
+        with metrics_bundle.time_request(target=WORKER_ID):
+            answer = worker.process(request, payload.context, engine)
     except WorkerUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

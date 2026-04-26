@@ -15,6 +15,10 @@ Configure via env vars:
     RAG_TOP_K                 (default: 3)
     THREADPOOL_TOKENS         (default: 1000)
     WORKER_HTTP_TIMEOUT_SEC   (default: 30.0)
+    MONITOR_INTERVAL_SEC      (default: 1.0)
+    MONITOR_TIMEOUT_SEC       (default: 0.5)
+    MONITOR_FAIL_THRESHOLD    (default: 3)
+    MONITOR_RECOVER_THRESHOLD (default: 3)
 
 Endpoints:
     GET  /                — liveness
@@ -30,6 +34,7 @@ import os
 import anyio
 from fastapi import FastAPI, HTTPException
 
+from common.metrics import MetricsBundle
 from common.wire import (
     RequestPayload,
     ResponsePayload,
@@ -37,6 +42,7 @@ from common.wire import (
 from lb import LoadBalancer, LoadBalancingStrategy
 from llm import LLMInferenceEngine
 from master import MasterScheduler
+from master.health_monitor import HealthMonitor
 from rag import RAGRetriever
 from workers.remote_proxy import RemoteWorkerProxy
 
@@ -74,6 +80,10 @@ RAG_USE_STUB = _env_bool("RAG_USE_STUB", True)
 RAG_TOP_K = _env_int("RAG_TOP_K", 3)
 THREADPOOL_TOKENS = _env_int("THREADPOOL_TOKENS", 1000)
 WORKER_HTTP_TIMEOUT = _env_float("WORKER_HTTP_TIMEOUT_SEC", 30.0)
+MONITOR_INTERVAL = _env_float("MONITOR_INTERVAL_SEC", 1.0)
+MONITOR_TIMEOUT = _env_float("MONITOR_TIMEOUT_SEC", 0.5)
+MONITOR_FAIL_THRESHOLD = _env_int("MONITOR_FAIL_THRESHOLD", 3)
+MONITOR_RECOVER_THRESHOLD = _env_int("MONITOR_RECOVER_THRESHOLD", 3)
 
 
 def _parse_worker_urls() -> list[tuple[str, str]]:
@@ -104,6 +114,7 @@ def _resolve_strategy(name: str) -> LoadBalancingStrategy:
 
 
 app = FastAPI(title="master")
+metrics_bundle = MetricsBundle(service="master")
 
 # Globals populated by startup.
 proxies: list[RemoteWorkerProxy] = []
@@ -111,11 +122,12 @@ load_balancer: LoadBalancer | None = None
 scheduler: MasterScheduler | None = None
 retriever: RAGRetriever | None = None
 inference_engine: LLMInferenceEngine | None = None
+monitor: HealthMonitor | None = None
 
 
 @app.on_event("startup")
-def _on_startup() -> None:
-    global proxies, load_balancer, scheduler, retriever, inference_engine
+async def _on_startup() -> None:
+    global proxies, load_balancer, scheduler, retriever, inference_engine, monitor
 
     anyio.to_thread.current_default_thread_limiter().total_tokens = THREADPOOL_TOKENS
 
@@ -148,6 +160,15 @@ def _on_startup() -> None:
         max_retries=MAX_RETRIES,
     )
 
+    monitor = HealthMonitor(
+        proxies,
+        poll_interval_seconds=MONITOR_INTERVAL,
+        probe_timeout_seconds=MONITOR_TIMEOUT,
+        failure_threshold=MONITOR_FAIL_THRESHOLD,
+        recovery_threshold=MONITOR_RECOVER_THRESHOLD,
+    )
+    await monitor.start()
+
     print(
         f"[master-svc] Ready. workers={[p.worker_id for p in proxies]}, "
         f"strategy={strategy.value}, max_retries={MAX_RETRIES}, "
@@ -156,7 +177,9 @@ def _on_startup() -> None:
 
 
 @app.on_event("shutdown")
-def _on_shutdown() -> None:
+async def _on_shutdown() -> None:
+    if monitor is not None:
+        await monitor.stop()
     for proxy in proxies:
         try:
             proxy.close()
@@ -184,12 +207,22 @@ def health() -> dict[str, object]:
             "failed_requests": scheduler.stats.failed_requests if scheduler else 0,
         },
         "workers": [p.snapshot_metrics() for p in proxies],
+        "monitor": monitor.snapshot() if monitor else [],
     }
 
 
 @app.get("/metrics")
-def metrics() -> dict[str, object]:
-    return health()
+def metrics():
+    # Refresh per-worker gauges before scraping so Prometheus sees current state.
+    for p in proxies:
+        snap = p.snapshot_metrics()
+        metrics_bundle.update_target_state(
+            target=p.worker_id,
+            status=str(snap["status"]),
+            active_tasks=int(snap["active_tasks"]),
+            pending_tasks=int(snap["pending_tasks"]),
+        )
+    return metrics_bundle.handler()
 
 
 @app.get("/workers")
@@ -208,10 +241,15 @@ def handle_request(payload: RequestPayload) -> ResponsePayload:
     except RuntimeError as exc:
         # All workers are FAILED — surface as 503 so the caller (LB / NGINX)
         # can return a graceful error to the client.
+        metrics_bundle.requests_total.labels("master", "no-worker", "all").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    response = scheduler.handle_request(request, worker)  # type: ignore[arg-type]
-    if response.status != "completed":
-        # Scheduler exhausted retries; surface to the caller.
-        raise HTTPException(status_code=502, detail="all retries exhausted")
+    target = worker.worker_id
+    try:
+        with metrics_bundle.time_request(target=target):
+            response = scheduler.handle_request(request, worker)  # type: ignore[arg-type]
+            if response.status != "completed":
+                raise HTTPException(status_code=502, detail="all retries exhausted")
+    except HTTPException:
+        raise
     return ResponsePayload.from_dataclass(response)

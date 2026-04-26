@@ -26,6 +26,7 @@ import os
 import anyio
 from fastapi import FastAPI, HTTPException
 
+from common.metrics import MetricsBundle
 from common.wire import RequestPayload, ResponsePayload
 from lb import LoadBalancer, LoadBalancingStrategy
 from workers.remote_proxy import RemoteWorkerProxy
@@ -81,6 +82,7 @@ def _resolve_strategy(name: str) -> LoadBalancingStrategy:
 
 
 app = FastAPI(title="lb")
+metrics_bundle = MetricsBundle(service="lb")
 
 # Globals populated by startup. Each master is wrapped in a RemoteWorkerProxy
 # so the existing LoadBalancer can route to it without a separate abstraction.
@@ -142,8 +144,16 @@ def health() -> dict[str, object]:
 
 
 @app.get("/metrics")
-def metrics() -> dict[str, object]:
-    return health()
+def metrics():
+    for p in master_proxies:
+        snap = p.snapshot_metrics()
+        metrics_bundle.update_target_state(
+            target=p.worker_id,
+            status=str(snap["status"]),
+            active_tasks=int(snap["active_tasks"]),
+            pending_tasks=int(snap["pending_tasks"]),
+        )
+    return metrics_bundle.handler()
 
 
 @app.post("/request", response_model=ResponsePayload)
@@ -155,11 +165,15 @@ def handle_request(payload: RequestPayload) -> ResponsePayload:
     try:
         master = load_balancer.select_worker(request)
     except RuntimeError as exc:
+        metrics_bundle.requests_total.labels("lb", "no-master", "all").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     try:
-        body = master.post_json("/request", payload.model_dump())
-        return ResponsePayload.model_validate(body)
+        with metrics_bundle.time_request(target=master.worker_id):
+            body = master.post_json("/request", payload.model_dump())
+            return ResponsePayload.model_validate(body)
+    except HTTPException:
+        raise
     except Exception as exc:  # noqa: BLE001 -- post_json raises WorkerTransientError, body validation can also fail
         raise HTTPException(status_code=502, detail=f"master error: {exc}") from exc
     finally:
