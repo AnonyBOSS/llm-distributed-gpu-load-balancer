@@ -1,0 +1,13 @@
+strategy,users,throughput_rps,p50_ms,p95_ms,p99_ms,errors,worker_dist
+round_robin,200,180.68,731.9,1082.3,1127.7,0,"{'gpu-worker-2': 67, 'gpu-worker-3': 66, 'gpu-worker-1': 67}"
+round_robin,500,264.52,1367.4,1824.8,1922.9,0,"{'gpu-worker-1': 167, 'gpu-worker-3': 166, 'gpu-worker-2': 167}"
+round_robin,1000,339.38,1961.8,3032.4,3435.2,4,"{'gpu-worker-2': 332, 'gpu-worker-1': 332, 'gpu-worker-3': 332}"
+least_connections,200,169.71,765.2,1151.0,1185.7,0,"{'gpu-worker-1': 66, 'gpu-worker-3': 67, 'gpu-worker-2': 67}"
+least_connections,500,288.46,1283.7,1700.2,1787.5,0,"{'gpu-worker-3': 167, 'gpu-worker-1': 164, 'gpu-worker-2': 169}"
+least_connections,1000,363.67,1988.6,2779.4,3131.9,6,"{'gpu-worker-2': 333, 'gpu-worker-1': 331, 'gpu-worker-3': 330}"
+load_aware,200,159.78,773.8,1215.2,1262.9,0,"{'gpu-worker-1': 19, 'gpu-worker-2': 36, 'gpu-worker-3': 145}"
+load_aware,500,283.26,1266.1,1678.5,1782.2,0,"{'gpu-worker-2': 93, 'gpu-worker-3': 358, 'gpu-worker-1': 49}"
+load_aware,1000,400.6,1747.7,2560.6,2963.2,3,"{'gpu-worker-1': 94, 'gpu-worker-2': 184, 'gpu-worker-3': 719}"
+power_of_two,200,162.95,790.9,1208.3,1248.7,0,"{'gpu-worker-1': 23, 'gpu-worker-2': 44, 'gpu-worker-3': 133}"
+power_of_two,500,287.12,1228.8,1650.6,1771.3,0,"{'gpu-worker-1': 55, 'gpu-worker-3': 338, 'gpu-worker-2': 107}"
+power_of_two,1000,379.39,1845.8,2675.0,3107.2,1,"{'gpu-worker-1': 120, 'gpu-worker-3': 647, 'gpu-worker-2': 232}"

@@ -142,6 +142,19 @@ async def _on_startup() -> None:
         for worker_id, url in pairs
     ]
 
+    # Probe each worker's /health to discover its actual MAX_CONCURRENT_TASKS,
+    # so heterogeneous worker pools (different sizes) feed the right capacity
+    # into load_aware / power_of_two strategies. Best-effort: workers that
+    # don't answer keep the env-default capacity.
+    for proxy in proxies:
+        info = proxy.probe_health()
+        if info is not None and info.max_concurrent_tasks > 0:
+            proxy.max_concurrent_tasks = info.max_concurrent_tasks
+            print(
+                f"[master-svc] {proxy.worker_id}: adopting "
+                f"max_concurrent_tasks={info.max_concurrent_tasks} from worker"
+            )
+
     strategy = _resolve_strategy(LB_STRATEGY_RAW)
     # LoadBalancer's static type hints want GPUWorkerNode but it only touches
     # the duck-typed surface (status, pending_tasks, max_concurrent_tasks,
@@ -247,6 +260,29 @@ def admin_strategy(payload: dict) -> dict[str, str]:
         ) from exc
     load_balancer.set_strategy(strategy)
     return {"strategy": strategy.value}
+
+
+@app.post("/admin/backend")
+def admin_backend_fanout(payload: dict) -> dict[str, object]:
+    """Fan out a backend swap to every registered worker.
+
+    This is a convenience for the benchmark harness so it doesn't need
+    each worker port published to the host. Failures on individual
+    workers are reported per-worker; the master endpoint itself returns 200
+    as long as it could reach at least one worker.
+    """
+    results: dict[str, object] = {}
+    any_ok = False
+    for proxy in proxies:
+        try:
+            body = proxy.post_json("/admin/backend", payload)
+            results[proxy.worker_id] = body
+            any_ok = True
+        except Exception as exc:  # noqa: BLE001
+            results[proxy.worker_id] = {"error": str(exc)}
+    if not any_ok:
+        raise HTTPException(status_code=503, detail="no workers reachable")
+    return {"workers": results}
 
 
 @app.post("/request", response_model=ResponsePayload)

@@ -9,6 +9,14 @@ worker, it is brought back to HEALTHY automatically.
 The monitor is the only piece that knows how to revive a FAILED worker
 without operator intervention. Without it, RemoteWorkerProxy can flip a
 worker FAILED on three transient HTTP errors but has no path back.
+
+Pattern: this is the classic *circuit breaker* (Nygard, "Release It!" 2nd ed.,
+Pragmatic Bookshelf 2018) plus an *active health check* (Google SRE Workbook,
+Ch. "Managing Load"). The two layers are deliberately independent:
+  - per-request retry (in MasterScheduler) handles single transient errors;
+  - active probing handles sustained outages and silently-recovered nodes.
+Independence matters because each layer has different MTTR characteristics
+and they fail open in different scenarios.
 """
 from __future__ import annotations
 

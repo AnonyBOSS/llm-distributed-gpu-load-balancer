@@ -87,6 +87,42 @@ scheduler retries it on `worker-1` or `worker-3`. The active monitor
 flips worker-2 `FAILED` after ~3 missed probes; subsequent requests
 route only to the survivors with zero further errors.
 
+## Continuous batching impact (Stream B)
+
+`scripts/benchmark.py --no-fault --strategies load_aware --user-counts 500 --compare-backends` runs the same 500-user `load_aware` workload twice — once with `LLM_BACKEND=sim`, once with `LLM_BACKEND=batched_sim` — and saves [charts/sim_vs_batched.png](../benchmarks/charts/sim_vs_batched.png).
+
+In our sleep-based simulation the *sim* backend already gets free parallelism because `time.sleep()` releases the GIL — 500 simulated inferences run effectively in parallel inside each worker process, so per-call sleep dominates and the batched backend's window/queue overhead is *not* recovered. This honestly captures the limits of sleep-based simulation.
+
+**Why batching wins on real hardware (and how to see it):**
+
+In production GPU inference, calls genuinely serialise on the device — one forward pass at a time. The batched backend models that serialisation: every call inside one 10 ms window waits for a single shared decode pass and they all finish together. On a real GPU with `transformers`, the win compounds further because the per-token cost is amortised across the batch (Yu et al., *Orca*, OSDI '22) and KV-cache reuse cuts memory bandwidth (Kwon et al., *vLLM*, SOSP '23). Run `make gpu-up` and `make bench-gpu` after the GPU image builds to see the comparison on real hardware.
+
+The unit test [tests/unit/test_llm_batching.py::test_calls_in_same_window_share_latency](../tests/unit/test_llm_batching.py) verifies the batching invariant directly: two callers arriving within one window finish within ~10 ms of each other rather than serialising. That's the property the simulation models faithfully even when sleep-based parallelism hides the throughput win.
+
+## Heterogeneous workers (Stream C)
+
+The default compose runs three identical workers (each `MAX_CONCURRENT_TASKS=8`). With identical workers, all four strategies converge — every worker is the same, so any selection rule produces near-uniform load. To surface the real differences, [deploy/docker-compose.heterogeneous.yml](../deploy/docker-compose.heterogeneous.yml) overrides capacities to **2 : 4 : 16** (total 22 in-flight slots).
+
+Bring it up and run the head-to-head:
+
+```bash
+make hetero-up
+make bench-hetero
+```
+
+Results (1000 users, charts in [charts/heterogeneous_strategy_comparison.png](../benchmarks/charts/heterogeneous_strategy_comparison.png)):
+
+| Strategy | Throughput (rps) | p99 (ms) | Errors | Distribution (small : medium : large) |
+|---|---:|---:|---:|---|
+| `round_robin`       | 339 | 3435 | 4 | **332 : 332 : 332** (ignores capacity) |
+| `least_connections` | 364 | 3132 | 6 | **331 : 333 : 330** (ignores capacity) |
+| `load_aware`        | **400** | **2963** | 3 | **94 : 184 : 719** (≈ 1 : 2 : 8) ✓ |
+| `power_of_two`      | 379 | 3107 | **1** | 120 : 232 : 647 (≈ 1 : 2 : 5) ✓ |
+
+**Headline:** `load_aware` delivers **18 % higher throughput and 14 % lower p99 latency** than `round_robin` once capacity heterogeneity is real. `power_of_two` has the fewest errors with O(1) state per request — important when the worker pool is large enough that scanning all of them is itself a bottleneck. Both capacity-aware strategies converge on a distribution close to the 1 : 2 : 8 capacity ratio, while the capacity-blind ones overload the small worker.
+
+This is the empirical evidence for the strategy table in the README and architecture.md's "Strategy choice for heterogeneous workers" section. Without heterogeneity (the default), the brief's three strategies are statistically indistinguishable.
+
 ## What's *not* shown here
 
 - **Real GPU.** The sim backend is the apples-to-apples comparison; HF backend numbers depend on the host's CPU and would skew the strategy comparison. Run with `LLM_BACKEND=hf` per worker (and `MAX_CONCURRENT_TASKS=1` since CPU inference doesn't parallelise within a process) for a real-model demo.

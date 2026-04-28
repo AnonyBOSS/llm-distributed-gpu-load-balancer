@@ -27,20 +27,38 @@ is preserved for fast local iteration and is what the unit tests target.
 ### Quickstart (distributed mode)
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d --build
+make up                                       # CPU stack (8 containers)
 curl -X POST http://localhost:8080/request \
      -H 'Content-Type: application/json' \
      -d '{"request_id":"r1","user_id":"u1","prompt":"hello","metadata":{}}'
+make bench-quick                              # 50- + 200-user smoke benchmark
+make down                                     # tear down
 ```
 
-Open the live dashboard at <http://localhost:3000/d/cse354-overview> (no login).
+`make help` lists every available target. Live dashboards once the stack is up:
 
-To run the full benchmark suite (~10 minutes; 12 ramp runs + 1 fault run,
-charts saved to `benchmarks/charts/`):
+| URL | What |
+|---|---|
+| <http://localhost:3000/d/cse354-overview> | Grafana dashboard (no login) |
+| <http://localhost:9090/targets> | Prometheus scrape targets |
+| <http://localhost:9000/docs> | Master service auto-generated OpenAPI |
+| <http://localhost:7000/docs> | Load-balancer service OpenAPI |
+
+Benchmark variants:
 
 ```bash
-python scripts/benchmark.py
-# or: python scripts/benchmark.py --quick
+make bench           # full 4-strategy x 4-user-count run + fault injection (~10 min)
+make bench-batching  # sim vs continuous-batching head-to-head
+make bench-hetero    # heterogeneous workers (capacity 1:2:8) — strategies actually differ
+```
+
+GPU mode (requires NVIDIA GPU + `nvidia-container-toolkit`):
+
+```bash
+make gpu-up          # workers run distilgpt2 on CUDA
+make gpu-smoke       # one real inference end-to-end
+make bench-gpu       # GPU benchmark (capped at 250 users)
+make gpu-down
 ```
 
 ### Topology
@@ -98,11 +116,12 @@ The architecture follows the CSE354 brief.
 
 `LoadBalancer` accepts a list of workers and a `LoadBalancingStrategy`. Three strategies are supported:
 
-| Strategy            | Selection rule                                                                                       |
-|---------------------|------------------------------------------------------------------------------------------------------|
-| `ROUND_ROBIN`       | next worker in a fixed rotation, regardless of load                                                  |
-| `LEAST_CONNECTIONS` | worker with the lowest current `active_tasks`                                                        |
-| `LOAD_AWARE`        | worker with the lowest `active_tasks / max_concurrent_tasks` ratio (capacity-normalised utilisation) |
+| Strategy            | Selection rule                                                                                                 | Cite |
+|---------------------|----------------------------------------------------------------------------------------------------------------|------|
+| `ROUND_ROBIN`       | next worker in a fixed rotation, regardless of load                                                            | — |
+| `LEAST_CONNECTIONS` | worker with the lowest current `pending_tasks`                                                                 | classical |
+| `LOAD_AWARE`        | worker with the lowest `pending_tasks / max_concurrent_tasks` ratio (capacity-normalised utilisation)          | Reiss et al., SoCC '12 |
+| `POWER_OF_TWO`      | sample two workers uniformly at random; pick the less-loaded one. Approaches global least-loaded with O(1) state | Mitzenmacher, IEEE TPDS 2001 |
 
 Failed workers are filtered out of the candidate pool before selection, so a node that has been marked `WorkerStatus.FAILED` stops receiving traffic without any extra coordination from the scheduler.
 
@@ -181,7 +200,7 @@ MasterScheduler.handle_request(request, worker)
 ```text
 .
 |-- client/
-|   `-- load_generator.py       # synthetic incoming requests
+|   `-- generator.py            # synthetic incoming requests
 |-- common/
 |   `-- models.py               # Request and Response dataclasses
 |-- lb/

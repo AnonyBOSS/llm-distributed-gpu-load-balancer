@@ -57,4 +57,64 @@ Horizontal scale today is one-axis: add more `worker-N` containers and add their
 
 ## What about real GPUs?
 
-The system uses a `SimulatedLLMBackend` by default for fast iteration. Setting `LLM_BACKEND=hf` per worker container loads `distilgpt2` via the HuggingFace `transformers` pipeline. CUDA is not required; both backends run on CPU. The architecture above is identical with real GPUs — only the worker's `LLMInferenceEngine` swaps backend.
+The system uses a `SimulatedLLMBackend` by default for fast iteration. Setting `LLM_BACKEND=hf` per worker container loads `distilgpt2` via the HuggingFace `transformers` pipeline.
+
+**CPU mode (default):** the base [deploy/Dockerfile](../deploy/Dockerfile) installs CPU-only torch from PyTorch's CPU index (`https://download.pytorch.org/whl/cpu`). `make up` brings up the CPU stack. Both `sim` and `hf` backends run on CPU.
+
+**GPU mode:** [deploy/Dockerfile.gpu](../deploy/Dockerfile.gpu) starts from `pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime`. [deploy/docker-compose.gpu.yml](../deploy/docker-compose.gpu.yml) attaches an NVIDIA GPU device per worker via `deploy.resources.reservations.devices`. The HF backend's `device="auto"` kwarg probes `torch.cuda.is_available()` and uses the GPU when present. `make gpu-up && make gpu-smoke` exercises the full path end-to-end. NVIDIA Container Toolkit (Linux) or Docker Desktop with WSL2-GPU (Windows) is required.
+
+## Trade-offs and theory
+
+This section makes the design decisions explicit so the reader can see *why* each was chosen, not just what it does.
+
+### CAP positioning
+
+Under the partition tolerance dimension of CAP (Brewer, PODC '00; Gilbert & Lynch, SIGACT '02), this system chooses **AP — availability with eventual consistency**. When the master temporarily can't reach a worker, it does NOT block requests waiting for ground truth; it serves from the cached `RemoteWorkerProxy` state and rolls forward. The active health monitor (1 s probes) is the eventual-consistency repair: within ~3 s of a real outage, the cached state catches up and the worker is removed from rotation.
+
+The opposite choice (CP) would freeze incoming requests while ground truth is unknown — wrong for a serving system whose SLO is latency.
+
+### Why a 3-strike circuit breaker?
+
+The 3-failure / 3-recovery threshold in [master/health_monitor.py](../master/health_monitor.py) is not arbitrary: it's the standard pattern from Nygard's *Release It!* (2nd ed., Pragmatic Bookshelf 2018) and Netflix's Hystrix. Reasoning:
+
+- **1-strike** would make any transient blip (a single dropped TCP packet) take a worker out of rotation. False positives dominate.
+- **5+ strikes** delays detection of a real outage to 5+ × 1 s = 5+ s, during which the LB keeps sending traffic to a black hole.
+- **3 strikes** is the Goldilocks point: 3 s detection latency, very low false-positive rate at our 1 s probe cadence, and trivially tunable per env (`MONITOR_FAIL_THRESHOLD`).
+
+### Why `pending_tasks`, not `active_tasks`, for selection?
+
+`active_tasks` increments inside `worker.process()`, which is *after* the LB has handed out the worker. Two concurrent selectors that both see `active_tasks == 0` for the same worker pick the same worker — the thundering herd. `pending_tasks` increments during selection (atomically with the lock-protected pick), so the second selector sees the first's reservation and chooses elsewhere. Equivalent to a token-bucket reservation in queueing-theory terms.
+
+This is the same race that Linux's `epoll` exclusive mode (Linux 4.5+) and Cloudflare's [lock-then-decrement](https://blog.cloudflare.com/the-sad-state-of-linux-socket-balancing/) pattern address. A 50-thread regression test in [tests/unit/test_load_balancer.py::test_concurrent_least_connections_distributes](../tests/unit/test_load_balancer.py) would have caught the original bug; it now guards against regressions.
+
+### Why two independent fault-tolerance layers?
+
+Per-request retry (in [master/scheduler.py](../master/scheduler.py)) and active health probing (in [master/health_monitor.py](../master/health_monitor.py)) have *different* MTTR profiles and fail open in *different* scenarios. The pattern is documented in the Google SRE Workbook ("Managing Load"):
+
+- **Single transient error** (e.g. a momentary GC pause): retry catches it, monitor never sees it.
+- **Sustained outage** (e.g. process crashed): retry exhausts attempts on the first request, but the monitor moves the worker out of the pool within ~3 s so subsequent requests don't waste time on it.
+- **Silent recovery** (e.g. operator restarted the container): monitor's recovery threshold notices and re-admits the worker; per-request retry has no way to discover this.
+
+Combining them is robust against any *one* of these failing, which is the property the SRE Workbook calls "defence in depth."
+
+### Strategy choice for heterogeneous workers
+
+In the homogeneous default compose (3 workers × 8 slots each), all four strategies converge — every worker is identical, so any selection rule produces near-uniform load. The strategies *only* differentiate themselves when workers differ. The heterogeneous benchmark ([scripts/heterogeneous_bench.py](../scripts/heterogeneous_bench.py), with [deploy/docker-compose.heterogeneous.yml](../deploy/docker-compose.heterogeneous.yml) at 1 : 2 : 8 capacity ratio) is what surfaces:
+
+- `round_robin` ignores capacity entirely → systematic overload of the small worker.
+- `least_connections` ignores capacity → same problem.
+- `load_aware` (Reiss et al., SoCC '12) divides queue depth by capacity → tracks the actual loadable amount.
+- `power_of_two` (Mitzenmacher 2001) gets close to global least-loaded with O(1) state per request — important when the worker pool is large enough that scanning all of them is itself a bottleneck.
+
+The standard result from Mitzenmacher's analysis is: under uniform random arrival, `power_of_two` reduces maximum queue length from $\Theta(\log n / \log \log n)$ to $\Theta(\log \log n)$ — exponentially better tails for the same per-request work.
+
+## References
+
+- Mitzenmacher, M. (2001). *The Power of Two Choices in Randomized Load Balancing.* IEEE TPDS.
+- Reiss, C., Tumanov, A., Ganger, G. R., Katz, R. H., Kozuch, M. A. (2012). *Heterogeneity and Dynamicity of Clouds at Scale: Google Trace Analysis.* SoCC '12.
+- Yu, G.-I., Jeong, J. S., Kim, G.-W., Kim, S., Chun, B.-G. (2022). *Orca: A Distributed Serving System for Transformer-Based Generative Models.* OSDI '22.
+- Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C. H., Gonzalez, J. E., Zhang, H., Stoica, I. (2023). *Efficient Memory Management for Large Language Model Serving with PagedAttention* (vLLM). SOSP '23.
+- Nygard, M. (2018). *Release It! Design and Deploy Production-Ready Software*, 2nd ed. Pragmatic Bookshelf. (Circuit breaker pattern.)
+- Brewer, E. (2000). *Towards Robust Distributed Systems.* PODC '00 keynote. (CAP theorem.)
+- Gilbert, S., Lynch, N. (2002). *Brewer's Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services.* SIGACT.
+- Beyer, B., Murphy, N. R., Rensin, D. K., Kawahara, K., Thorne, S. (eds.) (2018). *The Site Reliability Workbook.* O'Reilly. (Defence-in-depth load management.)

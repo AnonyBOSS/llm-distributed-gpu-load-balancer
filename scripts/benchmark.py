@@ -27,7 +27,6 @@ import argparse
 import csv
 import json
 import math
-import statistics
 import subprocess
 import sys
 import time
@@ -93,6 +92,18 @@ def _set_strategy(strategy: str) -> None:
         r = c.post(f"{MASTER_URL}/admin/strategy", json={"strategy": strategy})
         r.raise_for_status()
         print(f"[bench] master strategy -> {r.json()['strategy']}")
+
+
+def _set_backend(backend: str) -> None:
+    """Fan out a backend swap to every worker via the master proxy."""
+    with httpx.Client(timeout=120.0) as c:  # HF first-load can be slow
+        r = c.post(f"{MASTER_URL}/admin/backend", json={"backend": backend})
+        r.raise_for_status()
+        result = r.json()
+        bad = {k: v for k, v in result["workers"].items() if isinstance(v, dict) and "error" in v}
+        ok_count = len(result["workers"]) - len(bad)
+        print(f"[bench] backend -> {backend} on {ok_count} workers"
+              + (f" (failures: {bad})" if bad else ""))
 
 
 def _fire_one(client: httpx.Client, i: int) -> RequestResult:
@@ -246,9 +257,9 @@ def _save_raw(tag: str, results: list[RequestResult]) -> Path:
     return path
 
 
-def _save_csv(rows: list[RunSummary]) -> Path:
+def _save_csv(rows: list[RunSummary], filename: str = "results.csv") -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUT_DIR / "results.csv"
+    path = OUT_DIR / filename
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -269,6 +280,46 @@ def _save_csv(rows: list[RunSummary]) -> Path:
                 json.dumps(r.worker_distribution, sort_keys=True),
             ])
     return path
+
+
+def _save_compare_chart(rows: list[RunSummary]) -> None:
+    """Side-by-side bar chart of throughput + p99 for sim vs batched_sim."""
+    if not rows:
+        return
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+    labels = [r.strategy.split("/", 1)[-1] for r in rows]
+    throughputs = [r.throughput_rps for r in rows]
+    p99s = [r.p99_seconds * 1000 for r in rows]
+
+    fig, ax1 = plt.subplots(figsize=(8, 5))
+    x = list(range(len(labels)))
+    width = 0.35
+    bars1 = ax1.bar([i - width / 2 for i in x], throughputs, width=width,
+                    label="throughput (rps)", color="#2b8cbe")
+    ax1.set_ylabel("Throughput (req/s)", color="#2b8cbe")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels)
+    ax1.tick_params(axis="y", labelcolor="#2b8cbe")
+    for b, v in zip(bars1, throughputs):
+        ax1.text(b.get_x() + b.get_width() / 2, v, f"{v:.0f}", ha="center", va="bottom")
+
+    ax2 = ax1.twinx()
+    bars2 = ax2.bar([i + width / 2 for i in x], p99s, width=width,
+                    label="p99 latency (ms)", color="#e34a33")
+    ax2.set_ylabel("p99 latency (ms)", color="#e34a33")
+    ax2.tick_params(axis="y", labelcolor="#e34a33")
+    for b, v in zip(bars2, p99s):
+        ax2.text(b.get_x() + b.get_width() / 2, v, f"{v:.0f}", ha="center", va="bottom")
+
+    users = rows[0].users
+    plt.title(f"Sim vs continuous batching at {users} users (load_aware)")
+    fig.tight_layout()
+    plt.savefig(CHARTS_DIR / "sim_vs_batched.png", dpi=120)
+    plt.close()
 
 
 def _draw_charts(rows: list[RunSummary], fault_results: list[RequestResult] | None) -> None:
@@ -416,6 +467,30 @@ def main() -> None:
         help="trigger the fault after this many completed requests",
     )
     parser.add_argument("--no-fault", action="store_true", help="skip fault run")
+    parser.add_argument(
+        "--backend",
+        choices=["sim", "batched_sim"],
+        default="sim",
+        help="LLM backend on each worker; 'batched_sim' models continuous batching",
+    )
+    parser.add_argument(
+        "--compare-backends",
+        action="store_true",
+        help="run twice (sim then batched_sim) at one user count and chart the difference",
+    )
+    parser.add_argument(
+        "--compare-users",
+        type=int,
+        default=500,
+        help="user count for --compare-backends (default 500)",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["sim", "gpu"],
+        default="sim",
+        help="'gpu' assumes deploy/docker-compose.gpu.yml is up: smaller user "
+             "counts, results saved to results_gpu.csv",
+    )
     parser.add_argument("--quick", action="store_true",
                         help="shortcut: --user-counts=50,200 --strategies=load_aware --no-fault")
     args = parser.parse_args()
@@ -425,18 +500,31 @@ def main() -> None:
         args.strategies = ["load_aware"]
         args.no_fault = True
 
+    if args.mode == "gpu":
+        # Real-model HF inference is ~10-100x slower than sim. Cap user counts.
+        args.user_counts = [u for u in args.user_counts if u <= 250] or [50, 250]
+        args.no_fault = True
+        args.strategies = args.strategies or ["round_robin"]
+
     _check_stack()
     OUT_DIR.mkdir(exist_ok=True)
     RAW_DIR.mkdir(exist_ok=True)
 
+    # Apply requested LLM backend before any runs.
+    try:
+        _set_backend(args.backend)
+    except httpx.HTTPError as exc:
+        print(f"[bench] WARNING: could not set backend ({exc}); continuing with whatever the workers already have")
+
     rows: list[RunSummary] = []
     fault_results: list[RequestResult] | None = None
+    compare_rows: list[RunSummary] = []
 
     for strategy in args.strategies:
         for users in args.user_counts:
             summary, results = run_one(strategy, users)
             rows.append(summary)
-            tag = f"{strategy}_u{users}_clean"
+            tag = f"{args.backend}_{strategy}_u{users}_clean"
             _save_raw(tag, results)
             time.sleep(2)  # let pending_tasks fully drain between runs
 
@@ -448,9 +536,22 @@ def main() -> None:
         )
         rows.append(summary)
         fault_results = results
-        _save_raw(f"load_aware_u{args.fault_users}_fault", results)
+        _save_raw(f"{args.backend}_load_aware_u{args.fault_users}_fault", results)
 
-    csv_path = _save_csv(rows)
+    if args.compare_backends:
+        # Run a sim vs batched_sim head-to-head at one user count, single strategy.
+        for backend in ("sim", "batched_sim"):
+            _set_backend(backend)
+            time.sleep(1)
+            summary, results = run_one("load_aware", args.compare_users)
+            summary.strategy = f"{summary.strategy}/{backend}"
+            compare_rows.append(summary)
+            _save_raw(f"compare_{backend}_u{args.compare_users}", results)
+        _save_compare_chart(compare_rows)
+        rows.extend(compare_rows)
+
+    csv_name = "results_gpu.csv" if args.mode == "gpu" else "results.csv"
+    csv_path = _save_csv(rows, filename=csv_name)
     print(f"[bench] wrote {csv_path}")
 
     try:

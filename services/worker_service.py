@@ -34,6 +34,11 @@ from common.wire import (
     WorkerHealth,
 )
 from llm import LLMInferenceEngine
+from llm.inference import (
+    BatchedSimulatedLLMBackend,
+    HuggingFaceLLMBackend,
+    SimulatedLLMBackend,
+)
 from workers import GPUWorkerNode, WorkerUnavailableError
 
 
@@ -148,3 +153,32 @@ def admin_fail() -> dict[str, str]:
 def admin_recover() -> dict[str, str]:
     worker.mark_healthy()
     return {"worker_id": WORKER_ID, "status": worker.status.value}
+
+
+@app.post("/admin/backend")
+def admin_backend(payload: dict) -> dict[str, str]:
+    """Hot-swap the LLM backend at runtime.
+
+    Used by scripts/benchmark.py to A/B sim vs batched_sim without
+    rebuilding containers. Note: HF backend swap performs a real model
+    load and may take several seconds for the first request.
+    """
+    global engine
+    name = str(payload.get("backend", "")).strip().lower()
+    if name in ("sim", "simulated"):
+        engine = LLMInferenceEngine(backend=SimulatedLLMBackend())
+    elif name in ("batched", "batched_sim", "batched-sim"):
+        engine = LLMInferenceEngine(backend=BatchedSimulatedLLMBackend())
+    elif name in ("hf", "huggingface", "transformers"):
+        model_name = str(payload.get("model", "distilgpt2"))
+        device = str(payload.get("device", "auto"))
+        engine = LLMInferenceEngine(
+            backend=HuggingFaceLLMBackend(model_name=model_name, device=device)
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"backend={name!r} invalid. Use 'sim', 'batched_sim', or 'hf'.",
+        )
+    print(f"[worker-svc] Hot-swapped backend to {name}")
+    return {"backend": name}

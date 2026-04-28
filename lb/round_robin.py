@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import threading
 from enum import Enum
 from typing import Sequence
@@ -12,15 +13,29 @@ class LoadBalancingStrategy(str, Enum):
     ROUND_ROBIN = "round_robin"
     LEAST_CONNECTIONS = "least_connections"
     LOAD_AWARE = "load_aware"
+    POWER_OF_TWO = "power_of_two"
 
 
 class LoadBalancer:
-    """Selects a worker per request using one of three strategies.
+    """Selects a worker per request using one of four strategies.
 
     `select_worker()` is atomic: selection AND reservation happen under a
     single lock. The caller MUST call `worker.release()` after the request
     finishes (success or failure) — usually in a `finally` block. Without
     that, `pending_tasks` leaks and load_aware/least_connections degrade.
+
+    Why atomic select-and-reserve? Without the lock, N concurrent threads
+    that all see `pending_tasks==0` for the same worker pick that worker,
+    creating a thundering herd that defeats least_connections / load_aware
+    entirely. The fix mirrors how Linux's `epoll` exclusive mode and
+    Cloudflare's lock-then-decrement counter pattern handle the same race.
+
+    Why pending_tasks instead of active_tasks? `active_tasks` only
+    increments inside `worker.process()`, which is *after* selection
+    finishes — so concurrent selectors all see the same stale value.
+    `pending_tasks` is incremented during selection, so the next selector
+    sees the just-reserved slot. Equivalent to a token-bucket reservation
+    in queueing-theory terms.
     """
 
     def __init__(
@@ -35,6 +50,7 @@ class LoadBalancer:
         self._strategy = strategy
         self._next_index = 0
         self._lock = threading.Lock()
+        self._rng = random.Random()
 
     @property
     def workers(self) -> tuple[GPUWorkerNode, ...]:
@@ -67,6 +83,8 @@ class LoadBalancer:
                 worker = self._least_connections(available)
             elif self._strategy == LoadBalancingStrategy.LOAD_AWARE:
                 worker = self._load_aware(available)
+            elif self._strategy == LoadBalancingStrategy.POWER_OF_TWO:
+                worker = self._power_of_two(available)
             else:
                 raise ValueError(f"Unsupported strategy: {self._strategy}")
 
@@ -84,9 +102,16 @@ class LoadBalancer:
         return worker
 
     def _least_connections(self, workers: Sequence[GPUWorkerNode]) -> GPUWorkerNode:
+        # Classical join-the-shortest-queue policy, optimal under M/M/c
+        # assumptions but sensitive to heterogeneous worker capacity (a 1-slot
+        # worker and a 16-slot worker look the same when both are at zero).
         return min(workers, key=lambda w: w.pending_tasks)
 
     def _load_aware(self, workers: Sequence[GPUWorkerNode]) -> GPUWorkerNode:
+        # Capacity-normalised utilisation. Reiss et al., "Heterogeneity and
+        # Dynamicity of Clouds at Scale: Google Trace Analysis" (SoCC '12)
+        # documents how production clusters always have heterogeneous nodes;
+        # routing on raw queue length systematically underloads big workers.
         return min(
             workers,
             key=lambda w: (
@@ -94,3 +119,22 @@ class LoadBalancer:
                 if w.max_concurrent_tasks > 0 else float("inf")
             ),
         )
+
+    def _power_of_two(self, workers: Sequence[GPUWorkerNode]) -> GPUWorkerNode:
+        """Pick two random workers, send to the less-loaded one.
+
+        Mitzenmacher (2001), "The Power of Two Choices in Randomized Load
+        Balancing" (IEEE TPDS): selecting the lesser-loaded of two random
+        candidates yields exponentially better worst-case load than random,
+        and approaches the global least-loaded with O(1) state per request --
+        no shared sorted structure to contend on. Falls back to the single
+        candidate when only one healthy worker remains.
+        """
+        if len(workers) == 1:
+            return workers[0]
+        a, b = self._rng.sample(list(workers), 2)
+        if a.max_concurrent_tasks == 0 or b.max_concurrent_tasks == 0:
+            return a if a.pending_tasks <= b.pending_tasks else b
+        a_ratio = a.pending_tasks / a.max_concurrent_tasks
+        b_ratio = b.pending_tasks / b.max_concurrent_tasks
+        return a if a_ratio <= b_ratio else b

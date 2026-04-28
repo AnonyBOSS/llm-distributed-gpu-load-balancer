@@ -148,3 +148,47 @@ def test_degraded_workers_still_eligible():
 
     chosen_ids = {lb.select_worker(_req(f"r{i}")).worker_id for i in range(4)}
     assert chosen_ids == {"w0", "w1"}
+
+
+# -- Power-of-Two-Choices ------------------------------------------------------
+
+
+def test_power_of_two_picks_less_loaded_under_skew():
+    """With one heavily loaded worker and two light, P2C should rarely
+    pick the heavy one."""
+    workers = _make_workers(3)
+    workers[0].pending_tasks = 100  # the "hot" worker
+    lb = LoadBalancer(workers, strategy=LoadBalancingStrategy.POWER_OF_TWO)
+
+    picks = []
+    n = 200
+    for i in range(n):
+        chosen = lb.select_worker(_req(f"r{i}"))
+        picks.append(chosen.worker_id)
+        # release so pending_tasks doesn't snowball during the test
+        chosen.release()
+    # Restore the seeded skew (release decremented w0)
+    counts = {w.worker_id: picks.count(w.worker_id) for w in workers}
+    # P2C never picks the hottest worker unless both samples ARE the hottest,
+    # which can't happen because there's only one of it. Expected: w0 ~ 0,
+    # w1 + w2 ~ n.
+    assert counts["w0"] < n // 10, (
+        f"P2C picked the hot worker {counts['w0']} / {n} times: {counts}"
+    )
+
+
+def test_power_of_two_handles_single_worker():
+    workers = _make_workers(1)
+    lb = LoadBalancer(workers, strategy=LoadBalancingStrategy.POWER_OF_TWO)
+    assert lb.select_worker(_req()).worker_id == "w0"
+
+
+def test_set_strategy_switches_at_runtime():
+    workers = _make_workers(3)
+    lb = LoadBalancer(workers, strategy=LoadBalancingStrategy.ROUND_ROBIN)
+    assert lb.strategy == LoadBalancingStrategy.ROUND_ROBIN
+    lb.set_strategy(LoadBalancingStrategy.POWER_OF_TWO)
+    assert lb.strategy == LoadBalancingStrategy.POWER_OF_TWO
+    # verify selection still works on the new strategy
+    chosen = lb.select_worker(_req())
+    assert chosen.worker_id in {"w0", "w1", "w2"}

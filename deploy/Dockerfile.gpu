@@ -1,0 +1,33 @@
+# GPU image for the worker service.
+#
+# Starts from a NVIDIA-published PyTorch CUDA image so torch + cudnn are
+# preinstalled and matched. Builds on top with the project's other deps.
+# Used only by GPU workers under deploy/docker-compose.gpu.yml; the master
+# and LB services keep using the CPU Dockerfile because they have no
+# inference path.
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/root/.cache/huggingface
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-services.txt ./
+
+# Don't reinstall torch (the base image already has the matched CUDA build).
+# Strip torch-pulling lines from requirements.txt and let the base image's
+# torch satisfy sentence-transformers's transitive dep.
+RUN grep -v -E '^(torch|sentence-transformers)' requirements.txt > requirements.cuda.txt \
+    && pip install -r requirements.cuda.txt -r requirements-services.txt \
+    && pip install --no-deps sentence-transformers>=2.7 transformers>=4.40
+
+COPY . .
+
+CMD ["uvicorn", "services.worker_service:app", "--host", "0.0.0.0", "--port", "8000"]

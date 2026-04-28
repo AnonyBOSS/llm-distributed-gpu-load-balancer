@@ -1,0 +1,36 @@
+# Compose override that runs workers with DIFFERENT capacity.
+#
+# In the homogeneous default compose all workers have MAX_CONCURRENT_TASKS=8,
+# so round_robin / least_connections / load_aware / power_of_two all produce
+# similar distributions -- there's no signal in the choice.
+#
+# Apply on top of the base file:
+#   docker compose -f deploy/docker-compose.yml \
+#                  -f deploy/docker-compose.heterogeneous.yml \
+#                  up -d --force-recreate
+# then:
+#   python scripts/heterogeneous_bench.py
+#
+# Capacity ratio 1:2:4 (worker-1 : worker-2 : worker-3). Strategies that
+# look at capacity (load_aware) or pending count (power_of_two) should
+# materially beat round_robin under this configuration.
+
+services:
+  worker-1:
+    environment:
+      MAX_CONCURRENT_TASKS: "2"
+      WORKER_ID: gpu-worker-1
+      GPU_NAME: NVIDIA-A10-SIM-small
+  worker-2:
+    environment:
+      MAX_CONCURRENT_TASKS: "4"
+      WORKER_ID: gpu-worker-2
+      GPU_NAME: NVIDIA-A100-SIM-medium
+  worker-3:
+    environment:
+      MAX_CONCURRENT_TASKS: "16"
+      WORKER_ID: gpu-worker-3
+      GPU_NAME: NVIDIA-H100-SIM-large
+  master:
+    environment:
+      MAX_CONCURRENT_TASKS: "16"  # tell the master the largest capacity
