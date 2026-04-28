@@ -501,20 +501,31 @@ def main() -> None:
         args.no_fault = True
 
     if args.mode == "gpu":
-        # Real-model HF inference is ~10-100x slower than sim. Cap user counts.
-        args.user_counts = [u for u in args.user_counts if u <= 250] or [50, 250]
+        # Real-model HF inference is ~10-100x slower than sim. Don't cap by
+        # default (user can choose --user-counts), but skip the fault run and
+        # default to a single strategy unless overridden, so each invocation
+        # finishes in a reasonable time.
         args.no_fault = True
-        args.strategies = args.strategies or ["round_robin"]
+        if args.strategies == ["round_robin", "least_connections", "load_aware"]:
+            # User accepted the default; collapse to just round_robin in GPU mode
+            # so we don't run 4x more than they expected.
+            args.strategies = ["round_robin"]
 
     _check_stack()
     OUT_DIR.mkdir(exist_ok=True)
     RAW_DIR.mkdir(exist_ok=True)
 
-    # Apply requested LLM backend before any runs.
-    try:
-        _set_backend(args.backend)
-    except httpx.HTTPError as exc:
-        print(f"[bench] WARNING: could not set backend ({exc}); continuing with whatever the workers already have")
+    # Apply requested LLM backend before any runs. In `--mode gpu` the
+    # workers were started with LLM_BACKEND=hf via compose env; don't
+    # override that or we'd silently fall back to the simulated backend
+    # and the "GPU" benchmark would in fact measure sleeps.
+    if args.mode != "gpu":
+        try:
+            _set_backend(args.backend)
+        except httpx.HTTPError as exc:
+            print(f"[bench] WARNING: could not set backend ({exc}); continuing with whatever the workers already have")
+    else:
+        print("[bench] --mode gpu: leaving workers on their compose-configured HF backend")
 
     rows: list[RunSummary] = []
     fault_results: list[RequestResult] | None = None

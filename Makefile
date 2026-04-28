@@ -38,8 +38,8 @@ bench-quick:          ## Tiny benchmark: load_aware at 50 + 200 users, no fault
 bench-batching:       ## Sim vs continuous batching head-to-head at 500 users
 	python scripts/benchmark.py --no-fault --strategies load_aware --user-counts 500 --compare-backends
 
-bench-gpu:            ## GPU-mode benchmark (assumes `make gpu-up` already ran)
-	python scripts/benchmark.py --mode gpu --strategies round_robin --user-counts 50,100,250
+bench-gpu:            ## GPU-mode benchmark @ 50 / 250 / 1000 users (distilgpt2 on CUDA)
+	python scripts/benchmark.py --mode gpu --strategies round_robin --user-counts 50,250,1000
 
 bench-hetero:         ## Heterogeneous-worker benchmark across all 4 strategies
 	python scripts/heterogeneous_bench.py

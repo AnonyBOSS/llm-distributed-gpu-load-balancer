@@ -1,0 +1,2 @@
+strategy,users,fault,elapsed_sec,throughput_rps,successful,errors,error_rate,p50_ms,p95_ms,p99_ms,worker_dist,notes
+round_robin,50,False,23.62,2.12,50,0,0.0,23287.4,23639.9,23660.0,"{""gpu-worker-1"": 17, ""gpu-worker-2"": 17, ""gpu-worker-3"": 16}",real distilgpt2 on RTX 3060 -- ~0.5s per call serialised through 12 in-flight slots

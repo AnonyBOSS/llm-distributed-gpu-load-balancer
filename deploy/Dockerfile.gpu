@@ -26,7 +26,7 @@ COPY requirements.txt requirements-services.txt ./
 # torch satisfy sentence-transformers's transitive dep.
 RUN grep -v -E '^(torch|sentence-transformers)' requirements.txt > requirements.cuda.txt \
     && pip install -r requirements.cuda.txt -r requirements-services.txt \
-    && pip install --no-deps sentence-transformers>=2.7 transformers>=4.40
+    && pip install "transformers>=4.40,<5" "sentence-transformers>=2.7,<5"
 
 COPY . .
 

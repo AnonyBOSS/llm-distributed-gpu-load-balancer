@@ -32,10 +32,10 @@ services:
               capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
 
   worker-2:
     build:
@@ -57,10 +57,10 @@ services:
               capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
 
   worker-3:
     build:
@@ -82,10 +82,10 @@ services:
               capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
 
   master:
     environment:
