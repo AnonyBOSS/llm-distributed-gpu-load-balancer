@@ -7,7 +7,7 @@ from typing import Sequence
 from common import Request, Response
 from llm import LLMInferenceEngine
 from rag import RAGRetriever
-from workers import GPUWorkerNode
+from workers import GPUWorkerNode, WorkerAtCapacityError
 
 
 @dataclass(slots=True)
@@ -126,13 +126,26 @@ class MasterScheduler:
         context: str,
         candidate_workers: Sequence[GPUWorkerNode],
     ) -> tuple[str, GPUWorkerNode]:
-        max_attempts = min(len(candidate_workers), self._max_retries + 1)
+        # Two distinct counters:
+        #   `failure_attempts` -- counts only real failures (transient errors,
+        #   marked-failed workers); bounded by self._max_retries + 1.
+        #   `capacity_misses`  -- counts at-capacity rejections; we walk past
+        #   busy workers without consuming a retry, but we still cap at
+        #   len(candidate_workers) so the loop terminates if every worker is
+        #   slammed.
+        max_failure_attempts = self._max_retries + 1
+        failure_attempts = 0
+        capacity_misses = 0
         last_error: Exception | None = None
 
-        for attempt, worker in enumerate(candidate_workers[:max_attempts], start=1):
+        for worker in candidate_workers:
+            if failure_attempts >= max_failure_attempts:
+                break
+
             print(
                 f"[master] Scheduling {request.request_id} on worker "
-                f"{worker.worker_id} (attempt {attempt}/{max_attempts})"
+                f"{worker.worker_id} (failure_attempt={failure_attempts + 1}/"
+                f"{max_failure_attempts}, capacity_misses={capacity_misses})"
             )
 
             worker.reserve()
@@ -142,8 +155,19 @@ class MasterScheduler:
                     self._worker_successes.get(worker.worker_id, 0) + 1
                 )
                 return answer, worker
+            except WorkerAtCapacityError as exc:
+                # Load shedding: the worker is healthy but already at its
+                # MAX_CONCURRENT_TASKS. Walk to the next candidate without
+                # spending a failure attempt; do NOT mark this as a failure.
+                last_error = exc
+                capacity_misses += 1
+                print(
+                    f"[master] Worker {worker.worker_id} at capacity for "
+                    f"{request.request_id}; falling over to next candidate"
+                )
             except Exception as exc:
                 last_error = exc
+                failure_attempts += 1
                 self._worker_failures[worker.worker_id] = (
                     self._worker_failures.get(worker.worker_id, 0) + 1
                 )

@@ -1,5 +1,6 @@
 from .gpu_worker import (
     GPUWorkerNode,
+    WorkerAtCapacityError,
     WorkerStatus,
     WorkerTransientError,
     WorkerUnavailableError,
@@ -11,6 +12,7 @@ from .gpu_worker import (
 
 __all__ = [
     "GPUWorkerNode",
+    "WorkerAtCapacityError",
     "WorkerStatus",
     "WorkerTransientError",
     "WorkerUnavailableError",

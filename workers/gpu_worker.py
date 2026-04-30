@@ -23,6 +23,18 @@ class WorkerTransientError(RuntimeError):
     pass
 
 
+class WorkerAtCapacityError(RuntimeError):
+    """Raised when a worker is asked to process while already at full capacity.
+
+    Distinct from WorkerUnavailableError (which means the worker is FAILED)
+    so the scheduler can retry on another worker without tripping any
+    circuit breaker -- this is *load shedding*, not failure. The HTTP
+    boundary returns 503 with a Retry-After hint so the LB tier knows
+    to fall over instead of retrying the same worker.
+    """
+    pass
+
+
 class GPUWorkerNode:
     def __init__(
         self,
@@ -111,6 +123,16 @@ class GPUWorkerNode:
             )
 
         with self._lock:
+            # Self-shed when already at capacity. Without this guard a worker
+            # accepts every request and queues them on the (single) GPU,
+            # producing CUDA memory thrashing instead of clean fallover. The
+            # scheduler treats this as a routing miss and retries on another
+            # worker, so the upstream caller still gets served.
+            if self.active_tasks >= self.max_concurrent_tasks:
+                raise WorkerAtCapacityError(
+                    f"worker {self.worker_id} at capacity "
+                    f"({self.active_tasks}/{self.max_concurrent_tasks})"
+                )
             self.active_tasks += 1
             if (
                 self.status == WorkerStatus.HEALTHY

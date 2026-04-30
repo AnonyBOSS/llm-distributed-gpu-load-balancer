@@ -55,11 +55,29 @@ make bench-hetero    # heterogeneous workers (capacity 1:2:8) — strategies act
 GPU mode (requires NVIDIA GPU + `nvidia-container-toolkit`):
 
 ```bash
-make gpu-up          # workers run distilgpt2 on CUDA
+make gpu-up          # 2 workers on CUDA + 1 sim worker behind one master
 make gpu-smoke       # one real inference end-to-end
-make bench-gpu       # GPU benchmark (capped at 250 users)
+make bench-gpu       # GPU benchmark (defaults to 50 users — see hardware notes)
 make gpu-down
 ```
+
+### Hardware notes
+
+The default GPU compose ([deploy/docker-compose.gpu.yml](deploy/docker-compose.gpu.yml)) is tuned for ~6 GB consumer GPUs (RTX 3060 / 4060) and runs **2 GPU workers + 1 CPU/sim worker**. The math:
+
+| Setup | Per-worker VRAM (distilgpt2 fp32) | Total | Free on 6 GB | Outcome |
+|---|---:|---:|---:|---|
+| 1 GPU worker | ~2 GB | 2 GB | ~4 GB | Plenty of headroom; loses redundancy |
+| **2 GPU workers (default)** | ~2 GB | ~4 GB | ~2 GB | Comfortable for 50–100 user benchmarks |
+| 3 GPU workers | ~2 GB | ~6 GB | ~0 GB | OOMs under load, CPU pegs at 100 % |
+
+Three guardrails prevent the OOM-then-CPU-thrash failure mode:
+
+1. **Worker self-shedding** — each worker's `process()` raises `WorkerAtCapacityError` when `active_tasks >= MAX_CONCURRENT_TASKS`. The HTTP boundary returns 503 with `X-Reject-Reason: at-capacity`; the master's scheduler falls over to the next candidate without spending a retry attempt and without tripping the proxy's circuit breaker. Tested in [tests/unit/test_worker.py::test_at_capacity_worker_rejects_without_running](tests/unit/test_worker.py) and [tests/unit/test_scheduler.py::test_at_capacity_worker_falls_over_without_consuming_retries](tests/unit/test_scheduler.py).
+2. **Conservative `MAX_CONCURRENT_TASKS=2` per GPU worker** — caps in-flight inference per GPU process to leave KV-cache room.
+3. **`make bench-gpu` pre-flight VRAM check** — queries `nvidia-smi` before the run, aborts if free VRAM is too low for the requested peak user count.
+
+For larger GPUs (24 GB+), edit `deploy/docker-compose.gpu.yml` to put `worker-3` on GPU too and bump `MAX_CONCURRENT_TASKS`.
 
 ### Topology
 

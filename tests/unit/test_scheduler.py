@@ -117,3 +117,42 @@ def test_handle_batch_returns_per_request_responses():
     responses = sched.handle_batch(requests)
     assert len(responses) == 5
     assert all(r.status == "completed" for r in responses)
+
+
+# -- At-capacity fallover (load shedding without consuming retries) -----------
+
+
+def test_at_capacity_worker_falls_over_without_consuming_retries():
+    """A worker at capacity is a routing miss, not a failure. The scheduler
+    walks past it to the next candidate without spending a retry attempt,
+    and does NOT record the rejection as a per-worker failure."""
+    busy = GPUWorkerNode(worker_id="busy", gpu_name="x", max_concurrent_tasks=2)
+    busy.active_tasks = 2  # pinned at capacity
+    free = GPUWorkerNode(worker_id="free", gpu_name="x", max_concurrent_tasks=2)
+
+    # Pre-reserved order: scheduler tries busy first (passed in), then free.
+    # max_retries=0 means only one *failure* attempt is allowed -- if the
+    # at-capacity rejection counted as a failure, we'd give up after busy.
+    sched = MasterScheduler(
+        _retriever(), _engine(), workers=[busy, free], max_retries=0,
+    )
+    resp = sched.handle_request(_req(), worker=busy)
+
+    assert resp.status == "completed"
+    assert resp.worker_id == "free"
+    # The capacity miss did NOT increment busy's failure counter.
+    assert sched.worker_failures.get("busy", 0) == 0
+    assert sched.stats.successful_requests == 1
+
+
+def test_all_workers_at_capacity_returns_failed():
+    """If every candidate is at capacity, the request fails gracefully
+    rather than looping forever."""
+    workers = []
+    for i in range(2):
+        w = GPUWorkerNode(worker_id=f"w{i}", gpu_name="x", max_concurrent_tasks=2)
+        w.active_tasks = 2
+        workers.append(w)
+    sched = MasterScheduler(_retriever(), _engine(), workers=workers)
+    resp = sched.handle_request(_req())
+    assert resp.status == "failed"

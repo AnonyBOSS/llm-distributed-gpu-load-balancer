@@ -1,14 +1,27 @@
-# Compose override that runs each worker on a CUDA GPU.
+# Compose override that runs TWO workers on a CUDA GPU and ONE on CPU
+# (simulated backend). Tuned for ~6 GB consumer GPUs (RTX 3060 / 4060).
 #
-# Apply on top of the base compose file:
+# VRAM math on a 6 GB card:
+#   distilgpt2 fp32 ~ 150 MB weights + activations + KV-cache room ~ 2.0 GB / worker.
+#   Two GPU workers ~ 4 GB, leaves ~ 2 GB free for KV-cache under load.
+#   Three GPU workers exceeds 6 GB once KV-cache fills under concurrent
+#   inference and OOMs the GPU + thrashes the host CPU (we learned this
+#   the hard way on the first run, see commit bc37a36).
+#
+# The third worker stays on the CPU image with the simulated backend.
+# Combined with the two GPU workers, the master sees a heterogeneous mix
+# and the LB tier exercises load_aware / power_of_two selection across
+# different real backends.
+#
+# Apply on top of the base file:
 #   docker compose -f deploy/docker-compose.yml \
 #                  -f deploy/docker-compose.gpu.yml \
 #                  up -d --build
 #
-# Workers load the real HuggingFace model (distilgpt2 by default) and serve
-# inference from the GPU. The master + LB tiers stay on the CPU image
-# because they don't run inference. NVIDIA Container Toolkit / Docker
-# Desktop with WSL2-GPU is required.
+# For >12 GB VRAM hardware (A6000, A100), set worker-3 to GPU too by
+# adding the same `deploy.resources.reservations.devices` block + LLM_*
+# env to it. NVIDIA Container Toolkit / Docker Desktop with WSL2-GPU
+# is required either way.
 
 services:
 
@@ -21,7 +34,7 @@ services:
       LLM_BACKEND: hf
       LLM_MODEL: distilgpt2
       LLM_DEVICE: auto
-      MAX_CONCURRENT_TASKS: "4"
+      MAX_CONCURRENT_TASKS: "2"
       THREADPOOL_TOKENS: "100"
     deploy:
       resources:
@@ -46,7 +59,7 @@ services:
       LLM_BACKEND: hf
       LLM_MODEL: distilgpt2
       LLM_DEVICE: auto
-      MAX_CONCURRENT_TASKS: "4"
+      MAX_CONCURRENT_TASKS: "2"
       THREADPOOL_TOKENS: "100"
     deploy:
       resources:
@@ -62,30 +75,13 @@ services:
       retries: 60
       start_period: 300s
 
+  # Worker-3 stays on the CPU base image with the simulated backend.
+  # Demonstrates a heterogeneous worker pool (real GPU inference + sim)
+  # behind one master + LB.
   worker-3:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.gpu
-    image: cse354-llm-svc-gpu:latest
     environment:
-      LLM_BACKEND: hf
-      LLM_MODEL: distilgpt2
-      LLM_DEVICE: auto
-      MAX_CONCURRENT_TASKS: "4"
-      THREADPOOL_TOKENS: "100"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
-      interval: 10s
-      timeout: 10s
-      retries: 60
-      start_period: 300s
+      LLM_BACKEND: sim
+      MAX_CONCURRENT_TASKS: "8"
 
   master:
     environment:

@@ -7,6 +7,7 @@ from common import Request
 from llm import LLMInferenceEngine, SimulatedLLMBackend
 from workers import (
     GPUWorkerNode,
+    WorkerAtCapacityError,
     WorkerStatus,
     WorkerTransientError,
     WorkerUnavailableError,
@@ -83,6 +84,22 @@ def test_failed_worker_refuses_immediately():
     assert w.completed_tasks == 0
 
 
+def test_at_capacity_worker_rejects_without_running():
+    """Self-shed: a worker already at MAX_CONCURRENT_TASKS must refuse
+    new work rather than queue it on the (single) GPU. The scheduler's
+    retry loop treats this as a routing miss, not a failure."""
+    w = GPUWorkerNode(worker_id="w", gpu_name="x", max_concurrent_tasks=2)
+    w.active_tasks = 2  # simulate 2 in-flight requests
+    with pytest.raises(WorkerAtCapacityError):
+        w.process(_req(), context="", inference_engine=_engine())
+    # active_tasks must NOT have been incremented past capacity, and
+    # completed/failed counters stay clean (this isn't a failure).
+    assert w.active_tasks == 2
+    assert w.completed_tasks == 0
+    assert w.failed_tasks == 0
+    assert w.status == WorkerStatus.HEALTHY
+
+
 def test_transient_failure_decrements_active_tasks():
     w = GPUWorkerNode(worker_id="w", gpu_name="x", failure_rate=1.0)
     with pytest.raises(WorkerTransientError):
@@ -92,23 +109,31 @@ def test_transient_failure_decrements_active_tasks():
 
 
 def test_recovery_to_healthy_after_degraded():
-    # process() runs at active+1 then drops to active. The recovery check
-    # uses the post-decrement count: HEALTHY only if active <= max.
+    # The capacity guard now prevents active from exceeding max, so the
+    # only way to be DEGRADED is via external state change. Once a request
+    # finishes and active <= max, recovery fires.
     w = GPUWorkerNode(worker_id="w", gpu_name="x", max_concurrent_tasks=2)
-    w.active_tasks = 2
-    w.status = WorkerStatus.DEGRADED
+    w.active_tasks = 1
+    w.status = WorkerStatus.DEGRADED  # set artificially
     w.process(_req(), context="", inference_engine=_engine())
-    # active goes 2 -> 3 -> 2; 2 <= 2 satisfies the recovery condition.
+    # active goes 1 -> 2 -> 1; 1 <= 2 satisfies recovery.
     assert w.status == WorkerStatus.HEALTHY
 
 
-def test_stays_degraded_when_still_overloaded():
-    w = GPUWorkerNode(worker_id="w", gpu_name="x", max_concurrent_tasks=1)
-    w.active_tasks = 3
-    w.status = WorkerStatus.DEGRADED
+def test_capacity_guard_prevents_degraded_transition():
+    """With the new self-shed guard, active can never exceed max via
+    process(). The DEGRADED-on-overflow path is therefore unreachable
+    through the request flow -- DEGRADED is reserved for explicit
+    external state changes."""
+    w = GPUWorkerNode(worker_id="w", gpu_name="x", max_concurrent_tasks=2)
+    w.active_tasks = 1
     w.process(_req(), context="", inference_engine=_engine())
-    # active goes 3 -> 4 -> 3; 3 > 1 so still degraded.
-    assert w.status == WorkerStatus.DEGRADED
+    # active touched 2 mid-call but never exceeded max -> stayed HEALTHY.
+    assert w.status == WorkerStatus.HEALTHY
+    # Trying to process while at capacity raises WorkerAtCapacityError.
+    w.active_tasks = 2
+    with pytest.raises(WorkerAtCapacityError):
+        w.process(_req(), context="", inference_engine=_engine())
 
 
 # ── snapshot_metrics() ────────────────────────────────────────────────────────

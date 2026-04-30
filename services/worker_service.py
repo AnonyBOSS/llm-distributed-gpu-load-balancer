@@ -39,7 +39,7 @@ from llm.inference import (
     HuggingFaceLLMBackend,
     SimulatedLLMBackend,
 )
-from workers import GPUWorkerNode, WorkerUnavailableError
+from workers import GPUWorkerNode, WorkerAtCapacityError, WorkerUnavailableError
 
 
 def _env_int(name: str, default: int) -> int:
@@ -130,6 +130,15 @@ def process(payload: ProcessRequest) -> ProcessResponse:
     try:
         with metrics_bundle.time_request(target=WORKER_ID):
             answer = worker.process(request, payload.context, engine)
+    except WorkerAtCapacityError as exc:
+        # Load shedding, not failure. 503 + Retry-After tells callers to
+        # try a different worker; the proxy treats this as a routing miss
+        # and does NOT trip its circuit breaker on this response.
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+            headers={"Retry-After": "0", "X-Reject-Reason": "at-capacity"},
+        ) from exc
     except WorkerUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

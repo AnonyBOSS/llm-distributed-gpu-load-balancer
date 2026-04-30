@@ -16,7 +16,12 @@ import httpx
 from common import Request
 from common.wire import ProcessRequest, ProcessResponse, RequestPayload, WorkerHealth
 
-from .gpu_worker import WorkerStatus, WorkerTransientError, WorkerUnavailableError
+from .gpu_worker import (
+    WorkerAtCapacityError,
+    WorkerStatus,
+    WorkerTransientError,
+    WorkerUnavailableError,
+)
 
 
 class RemoteWorkerProxy:
@@ -133,6 +138,17 @@ class RemoteWorkerProxy:
                 f"{self.url}/process",
                 json=payload.model_dump(),
             )
+            # 503 with X-Reject-Reason=at-capacity is load shedding, not a
+            # failure. Surface as WorkerAtCapacityError without incrementing
+            # the consecutive-failure counter -- a worker that is healthy but
+            # busy must not be marked FAILED by the proxy.
+            if (
+                response.status_code == 503
+                and response.headers.get("X-Reject-Reason") == "at-capacity"
+            ):
+                raise WorkerAtCapacityError(
+                    f"remote {self.worker_id} reports at-capacity"
+                )
             response.raise_for_status()
             body = ProcessResponse.model_validate(response.json())
             latency = perf_counter() - start
@@ -144,6 +160,10 @@ class RemoteWorkerProxy:
                 self._consecutive_failures = 0
 
             return body.answer
+        except WorkerAtCapacityError:
+            # No accounting beyond active_tasks decrement in finally; not a
+            # failure for the proxy's circuit breaker.
+            raise
         except httpx.HTTPError as exc:
             with self._lock:
                 self.failed_tasks += 1

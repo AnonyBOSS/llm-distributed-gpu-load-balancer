@@ -440,6 +440,60 @@ def _check_stack() -> None:
         sys.exit(1)
 
 
+def _gpu_preflight(user_counts: list[int]) -> None:
+    """In --mode gpu, warn / abort if VRAM headroom is dangerously low.
+
+    A model copy on GPU costs ~2 GB for distilgpt2 (fp32 weights + activations
+    + KV-cache room). The compose default is 2 GPU workers ~ 4 GB used, ~2 GB
+    free on a 6 GB card. If less than ~1 GB is free *now*, the next
+    benchmark run is likely to OOM the GPU mid-flight, which on the first
+    run cooked the host CPU to 95 C while CUDA thrashed.
+    """
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.free,memory.total",
+             "--format=csv,noheader,nounits"],
+            text=True,
+            timeout=5,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        print("[bench] --mode gpu: nvidia-smi not available; skipping VRAM pre-flight")
+        return
+
+    first_line = out.splitlines()[0]
+    free_mib_s, total_mib_s = (p.strip() for p in first_line.split(","))
+    try:
+        free_mib = int(free_mib_s)
+        total_mib = int(total_mib_s)
+    except ValueError:
+        print(f"[bench] could not parse nvidia-smi output: {first_line!r}; skipping pre-flight")
+        return
+
+    print(
+        f"[bench] GPU memory: free={free_mib} MiB / total={total_mib} MiB"
+    )
+
+    # Heuristic budget: each concurrent in-flight request can grow KV-cache
+    # by tens of MB; 1 MB per token at most for small models. Reserve 200 MB
+    # headroom + 5 MB per peak concurrent user.
+    peak_users = max(user_counts) if user_counts else 0
+    needed_mib = 200 + 5 * peak_users
+
+    if free_mib < needed_mib:
+        print(
+            f"[bench] ABORT: only {free_mib} MiB VRAM free, "
+            f"benchmark at peak {peak_users} users wants ~{needed_mib} MiB.\n"
+            f"        Reduce --user-counts (try 50), or move workers off GPU "
+            f"(LLM_BACKEND=sim), or use a card with more VRAM."
+        )
+        sys.exit(2)
+    if free_mib < needed_mib * 2:
+        print(
+            f"[bench] WARNING: only {free_mib} MiB VRAM free for an estimated "
+            f"{needed_mib} MiB peak demand; running anyway"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -512,6 +566,8 @@ def main() -> None:
             args.strategies = ["round_robin"]
 
     _check_stack()
+    if args.mode == "gpu":
+        _gpu_preflight(args.user_counts)
     OUT_DIR.mkdir(exist_ok=True)
     RAW_DIR.mkdir(exist_ok=True)
 

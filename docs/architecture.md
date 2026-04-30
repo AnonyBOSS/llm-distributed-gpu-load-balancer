@@ -87,6 +87,19 @@ The 3-failure / 3-recovery threshold in [master/health_monitor.py](../master/hea
 
 This is the same race that Linux's `epoll` exclusive mode (Linux 4.5+) and Cloudflare's [lock-then-decrement](https://blog.cloudflare.com/the-sad-state-of-linux-socket-balancing/) pattern address. A 50-thread regression test in [tests/unit/test_load_balancer.py::test_concurrent_least_connections_distributes](../tests/unit/test_load_balancer.py) would have caught the original bug; it now guards against regressions.
 
+### Why a worker self-sheds when at capacity
+
+Each `GPUWorkerNode.process()` raises `WorkerAtCapacityError` when `active_tasks >= max_concurrent_tasks`. The worker doesn't accept the request and queue it on the GPU; instead the HTTP boundary returns `503` with `X-Reject-Reason: at-capacity`, the proxy raises `WorkerAtCapacityError` to the scheduler, and the scheduler walks to the next candidate without spending a retry attempt.
+
+Why is this an architectural improvement, not just defensive coding?
+
+- **Without self-shedding** the worker accepts every request and queues them. On a single-GPU host that means N concurrent `transformers.pipeline(...)` calls fighting for one PCIe bus and one VRAM allocator. CUDA starts evicting and reloading KV-cache between calls. Every request slows down by 10–100×, and because each Python thread is busy-spinning in CUDA driver code waiting for the GPU, the host CPU gets pegged at 100 %. This *is* what bricked the host on the first GPU run; see commit `bc37a36`.
+- **With self-shedding** load above capacity becomes a *routing problem*, not a *resource-contention problem*. The master sees the 503, the LB picks a different worker (or returns a graceful failure if every worker is busy), and the GPU keeps running its in-flight batch at full speed.
+
+This is the *load shedding* pattern from production serving (Brooker, [Amazon Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/), 2020): refusing work you can't do well is strictly better than accepting work you can't finish. Two production techniques in this family — graceful degradation and admission control — collapse to the same insight.
+
+The 503 carries a custom `X-Reject-Reason: at-capacity` header so the proxy can distinguish "worker overloaded" from "worker is dying." A real failure (5xx without that header, or a transport error) still trips the consecutive-failure counter and eventually marks the worker FAILED. Capacity rejections do not.
+
 ### Why two independent fault-tolerance layers?
 
 Per-request retry (in [master/scheduler.py](../master/scheduler.py)) and active health probing (in [master/health_monitor.py](../master/health_monitor.py)) have *different* MTTR profiles and fail open in *different* scenarios. The pattern is documented in the Google SRE Workbook ("Managing Load"):
