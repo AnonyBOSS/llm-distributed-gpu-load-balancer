@@ -114,30 +114,53 @@ def _fire_one(client: httpx.Client, i: int) -> RequestResult:
         "metadata": {"client_index": i, "source": "benchmark"},
     }
     start = time.perf_counter()
-    try:
-        r = client.post(f"{LB_URL}/request", json=payload, timeout=120.0)
-        latency = time.perf_counter() - start
-        worker_id = "?"
-        if r.status_code == 200:
-            try:
-                worker_id = r.json().get("worker_id", "?")
-            except Exception:  # noqa: BLE001
-                pass
-        return RequestResult(
-            request_id=payload["request_id"],
-            status_code=r.status_code,
-            worker_id=worker_id,
-            latency_seconds=latency,
-            timestamp=time.time(),
-        )
-    except httpx.HTTPError:
-        return RequestResult(
-            request_id=payload["request_id"],
-            status_code=0,
-            worker_id="?",
-            latency_seconds=time.perf_counter() - start,
-            timestamp=time.time(),
-        )
+    # Client-side retry with backoff. With Week 4's worker self-shedding,
+    # 502/503 means "system at capacity, try again" -- the production-correct
+    # response is to back off briefly and retry, not give up. Without this,
+    # any benchmark whose offered load exceeds total slot capacity reports
+    # massive errors even though the server is healthy.
+    #
+    # Budget: 10 attempts with exponential backoff starting at 0.1 s
+    # gives ~ 0.1+0.2+0.4+0.8+1.6+3.2+6.4+12.8+25.6 = 51 s total before
+    # giving up -- enough to drain a GPU-bound queue at ~ 5 rps.
+    max_attempts = 10
+    backoff = 0.1
+    last_status = 0
+    last_worker = "?"
+    for attempt in range(max_attempts):
+        try:
+            r = client.post(f"{LB_URL}/request", json=payload, timeout=120.0)
+            last_status = r.status_code
+            if r.status_code == 200:
+                try:
+                    last_worker = r.json().get("worker_id", "?")
+                except Exception:  # noqa: BLE001
+                    pass
+                latency = time.perf_counter() - start
+                return RequestResult(
+                    request_id=payload["request_id"],
+                    status_code=200,
+                    worker_id=last_worker,
+                    latency_seconds=latency,
+                    timestamp=time.time(),
+                )
+            if r.status_code in (502, 503) and attempt + 1 < max_attempts:
+                # capacity-related; retry with exponential backoff + jitter
+                time.sleep(backoff * (2 ** attempt) + 0.001 * (i % 10))
+                continue
+            break
+        except httpx.HTTPError:
+            if attempt + 1 < max_attempts:
+                time.sleep(backoff * (2 ** attempt))
+                continue
+            break
+    return RequestResult(
+        request_id=payload["request_id"],
+        status_code=last_status,
+        worker_id=last_worker,
+        latency_seconds=time.perf_counter() - start,
+        timestamp=time.time(),
+    )
 
 
 def _inject_fault() -> None:

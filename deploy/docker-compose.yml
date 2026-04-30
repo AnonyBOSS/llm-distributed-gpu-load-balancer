@@ -22,7 +22,13 @@ services:
     environment:
       WORKER_ID: gpu-worker-1
       GPU_NAME: NVIDIA-A100-SIM
-      MAX_CONCURRENT_TASKS: "8"
+      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # in-flight slots. Sim backend's time.sleep() releases the GIL so
+      # holding many in-flight is essentially free. Self-shedding still
+      # kicks in past 1200 (real overload). The GPU compose override sets
+      # this to 2 because real GPU inference doesn't parallelise the way
+      # sim sleeps do.
+      MAX_CONCURRENT_TASKS: "400"
       FAILURE_RATE: "0.0"
       LLM_BACKEND: sim
       THREADPOOL_TOKENS: "1000"
@@ -41,7 +47,13 @@ services:
     environment:
       WORKER_ID: gpu-worker-2
       GPU_NAME: NVIDIA-A100-SIM
-      MAX_CONCURRENT_TASKS: "8"
+      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # in-flight slots. Sim backend's time.sleep() releases the GIL so
+      # holding many in-flight is essentially free. Self-shedding still
+      # kicks in past 1200 (real overload). The GPU compose override sets
+      # this to 2 because real GPU inference doesn't parallelise the way
+      # sim sleeps do.
+      MAX_CONCURRENT_TASKS: "400"
       FAILURE_RATE: "0.0"
       LLM_BACKEND: sim
       THREADPOOL_TOKENS: "1000"
@@ -60,7 +72,13 @@ services:
     environment:
       WORKER_ID: gpu-worker-3
       GPU_NAME: NVIDIA-A100-SIM
-      MAX_CONCURRENT_TASKS: "8"
+      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # in-flight slots. Sim backend's time.sleep() releases the GIL so
+      # holding many in-flight is essentially free. Self-shedding still
+      # kicks in past 1200 (real overload). The GPU compose override sets
+      # this to 2 because real GPU inference doesn't parallelise the way
+      # sim sleeps do.
+      MAX_CONCURRENT_TASKS: "400"
       FAILURE_RATE: "0.0"
       LLM_BACKEND: sim
       THREADPOOL_TOKENS: "1000"
@@ -84,7 +102,13 @@ services:
       WORKER_URLS: "http://worker-1:8000,http://worker-2:8000,http://worker-3:8000"
       WORKER_IDS:  "gpu-worker-1,gpu-worker-2,gpu-worker-3"
       LB_STRATEGY: load_aware
-      MAX_CONCURRENT_TASKS: "8"
+      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # in-flight slots. Sim backend's time.sleep() releases the GIL so
+      # holding many in-flight is essentially free. Self-shedding still
+      # kicks in past 1200 (real overload). The GPU compose override sets
+      # this to 2 because real GPU inference doesn't parallelise the way
+      # sim sleeps do.
+      MAX_CONCURRENT_TASKS: "400"
       MAX_RETRIES: "1"
       RAG_USE_STUB: "true"
       RAG_TOP_K: "3"

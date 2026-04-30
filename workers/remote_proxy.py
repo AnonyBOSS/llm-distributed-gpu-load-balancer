@@ -96,15 +96,29 @@ class RemoteWorkerProxy:
         Used by the LB tier when forwarding to a master (which returns a full
         ResponsePayload, not the worker /process body). Exposes circuit-breaker
         bookkeeping without callers reaching into private fields.
+
+        Treats 502 / 503 as transient overload (do NOT trip the circuit
+        breaker): the upstream is reachable and responsive, just temporarily
+        out of capacity. Without this, a brief overload at the master tier
+        permanently marks the master FAILED at the LB tier with no recovery
+        path (no active health monitor at LB).
         """
         path = path if path.startswith("/") else f"/{path}"
         try:
             r = self._client.post(f"{self.url}{path}", json=payload)
+            if r.status_code in (502, 503):
+                # Don't count as failure -- upstream is healthy but overloaded.
+                raise WorkerTransientError(
+                    f"remote {self.worker_id} returned {r.status_code} on {path} "
+                    f"(transient overload, not a worker failure)"
+                )
             r.raise_for_status()
             with self._lock:
                 self.completed_tasks += 1
                 self._consecutive_failures = 0
             return r.json()
+        except WorkerTransientError:
+            raise
         except httpx.HTTPError as exc:
             with self._lock:
                 self.failed_tasks += 1

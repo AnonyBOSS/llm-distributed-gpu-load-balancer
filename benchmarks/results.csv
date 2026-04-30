@@ -1,4 +1,4 @@
 strategy,users,fault,elapsed_sec,throughput_rps,successful,errors,error_rate,p50_ms,p95_ms,p99_ms,worker_dist
-load_aware,500,False,1.658,301.62,500,0,0.0,1230.4,1579.3,1662.1,"{""gpu-worker-1"": 168, ""gpu-worker-2"": 164, ""gpu-worker-3"": 168}"
-load_aware/sim,500,False,1.726,289.06,499,1,0.002,1277.8,1635.6,1725.0,"{""gpu-worker-1"": 169, ""gpu-worker-2"": 165, ""gpu-worker-3"": 165}"
-load_aware/batched_sim,500,False,2.022,246.73,499,1,0.002,1218.1,1954.0,2075.2,"{""gpu-worker-1"": 169, ""gpu-worker-2"": 161, ""gpu-worker-3"": 169}"
+load_aware,500,False,1.627,307.29,500,0,0.0,1098.5,1549.0,1682.7,"{""gpu-worker-1"": 168, ""gpu-worker-2"": 167, ""gpu-worker-3"": 165}"
+load_aware/sim,500,False,1.633,305.56,499,1,0.002,1246.3,1590.9,1663.2,"{""gpu-worker-1"": 169, ""gpu-worker-2"": 164, ""gpu-worker-3"": 166}"
+load_aware/batched_sim,500,False,1.614,309.78,500,0,0.0,1161.9,1542.2,1617.0,"{""gpu-worker-1"": 171, ""gpu-worker-2"": 164, ""gpu-worker-3"": 165}"

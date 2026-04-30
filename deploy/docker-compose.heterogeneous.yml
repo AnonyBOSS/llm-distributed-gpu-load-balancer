@@ -16,21 +16,28 @@
 # materially beat round_robin under this configuration.
 
 services:
+  # Capacities preserve the 1:2:8 ratio while sized for the brief's
+  # 1000-user benchmark. With self-shedding active (Week 4 fix), capacity
+  # ratios that are too tight versus the offered load reject most traffic.
+  # 50:100:400 = 550 slots total: under round_robin the small worker (50)
+  # is overloaded (gets 333 of 1000) and rejects ~283; under load_aware
+  # the distribution shifts to ~91:182:727 (proportional to capacity) so
+  # all 1000 fit. That's the demonstration the report wants.
   worker-1:
     environment:
-      MAX_CONCURRENT_TASKS: "2"
+      MAX_CONCURRENT_TASKS: "50"
       WORKER_ID: gpu-worker-1
       GPU_NAME: NVIDIA-A10-SIM-small
   worker-2:
     environment:
-      MAX_CONCURRENT_TASKS: "4"
+      MAX_CONCURRENT_TASKS: "100"
       WORKER_ID: gpu-worker-2
       GPU_NAME: NVIDIA-A100-SIM-medium
   worker-3:
     environment:
-      MAX_CONCURRENT_TASKS: "16"
+      MAX_CONCURRENT_TASKS: "400"
       WORKER_ID: gpu-worker-3
       GPU_NAME: NVIDIA-H100-SIM-large
   master:
     environment:
-      MAX_CONCURRENT_TASKS: "16"  # tell the master the largest capacity
+      MAX_CONCURRENT_TASKS: "400"  # tell the master the largest capacity
