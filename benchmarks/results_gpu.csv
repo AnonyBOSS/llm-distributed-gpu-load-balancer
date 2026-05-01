@@ -1,2 +1,2 @@
 strategy,users,fault,elapsed_sec,throughput_rps,successful,errors,error_rate,p50_ms,p95_ms,p99_ms,worker_dist
-round_robin,20,False,1.354,14.77,20,0,0.0,968.5,1358.7,1362.3,"{""gpu-worker-1"": 2, ""gpu-worker-2"": 2, ""gpu-worker-3"": 16}"
+round_robin,100,False,14.376,6.96,100,0,0.0,6374.9,11153.9,13773.8,"{""gpu-worker-1"": 18, ""gpu-worker-2"": 16, ""gpu-worker-3"": 66}"

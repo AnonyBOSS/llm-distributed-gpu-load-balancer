@@ -86,3 +86,7 @@ services:
   master:
     environment:
       WORKER_HTTP_TIMEOUT_SEC: "120"
+      # Real RAG: master loads sentence-transformers/all-MiniLM-L6-v2 (~90 MB)
+      # and FAISS-indexes the 16-doc corpus on first call. Adds ~30 s warmup
+      # to the first request, ~10-50 ms per call thereafter.
+      RAG_USE_STUB: "false"
