@@ -1,0 +1,7 @@
+services:
+  master:
+    environment:
+      RAG_USE_STUB: "false"
+  lb:
+    environment:
+      MASTER_HTTP_TIMEOUT_SEC: "120"

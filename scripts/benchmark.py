@@ -507,24 +507,26 @@ def _gpu_preflight(user_counts: list[int]) -> None:
 
     print(f"[bench] GPU memory: free={free_mib} MiB / total={total_mib} MiB")
 
-    # Heuristic budget: each concurrent in-flight request can grow KV-cache
-    # by tens of MB; 1 MB per token at most for small models. Reserve 200 MB
-    # headroom + 5 MB per peak concurrent user.
+    # Hard abort: less than 1 GB free means models themselves may OOM.
+    if free_mib < 1024:
+        print(
+            f"[bench] ABORT: only {free_mib} MiB VRAM free — not enough headroom "
+            f"for model weights. Free at least 1 GB before running."
+        )
+        sys.exit(2)
+
+    # KV-cache budget: bounded by MAX_CONCURRENT_TASKS (GPU compose default = 2
+    # per worker × 2 GPU workers = 4), NOT by the number of queued users.
+    # Users beyond the concurrency cap queue in Python and consume zero VRAM.
+    # Cap at 20 to stay accurate even for larger GPU pools.
     peak_users = max(user_counts) if user_counts else 0
-    needed_mib = 200 + 5 * peak_users
+    gpu_concurrent = min(peak_users, 20)
+    needed_mib = 200 + 5 * gpu_concurrent
 
     if free_mib < needed_mib:
         print(
-            f"[bench] ABORT: only {free_mib} MiB VRAM free, "
-            f"benchmark at peak {peak_users} users wants ~{needed_mib} MiB.\n"
-            f"        Reduce --user-counts (try 50), or move workers off GPU "
-            f"(LLM_BACKEND=sim), or use a card with more VRAM."
-        )
-        sys.exit(2)
-    if free_mib < needed_mib * 2:
-        print(
             f"[bench] WARNING: only {free_mib} MiB VRAM free for an estimated "
-            f"{needed_mib} MiB peak demand; running anyway"
+            f"{needed_mib} MiB KV-cache peak; running anyway"
         )
 
 
