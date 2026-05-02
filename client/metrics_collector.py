@@ -16,7 +16,6 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-
 # ── Per-request record ────────────────────────────────────────────────────────
 
 @dataclass

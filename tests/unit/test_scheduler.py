@@ -103,7 +103,9 @@ def test_pre_reserved_worker_is_released_at_end():
 
 def test_no_workers_and_no_explicit_raises():
     sched = MasterScheduler(_retriever(), _engine(), workers=[])
-    with pytest.raises(Exception):
+    # ValueError from _resolve_candidate_workers; bubbles through finally
+    # block in handle_request without being caught.
+    with pytest.raises(ValueError, match="requires either"):
         sched.handle_request(_req())
 
 

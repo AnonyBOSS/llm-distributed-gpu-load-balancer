@@ -108,32 +108,36 @@ def test_transient_failure_decrements_active_tasks():
     assert w.failed_tasks == 1
 
 
-def test_recovery_to_healthy_after_degraded():
-    # The capacity guard now prevents active from exceeding max, so the
-    # only way to be DEGRADED is via external state change. Once a request
-    # finishes and active <= max, recovery fires.
-    w = GPUWorkerNode(worker_id="w", gpu_name="x", max_concurrent_tasks=2)
-    w.active_tasks = 1
-    w.status = WorkerStatus.DEGRADED  # set artificially
-    w.process(_req(), context="", inference_engine=_engine())
-    # active goes 1 -> 2 -> 1; 1 <= 2 satisfies recovery.
-    assert w.status == WorkerStatus.HEALTHY
+def test_draining_worker_refuses_new_work():
+    """Once `begin_drain()` is called, process() must refuse new work
+    immediately so in-flight requests can finish without competition for
+    the (single) GPU. Same WorkerUnavailableError path as a FAILED worker."""
+    w = GPUWorkerNode(worker_id="w", gpu_name="x")
+    w.begin_drain()
+    assert w.is_draining
+    with pytest.raises(WorkerUnavailableError, match="draining"):
+        w.process(_req(), context="", inference_engine=_engine())
+    # Counters untouched; this is not a failure.
+    assert w.completed_tasks == 0
+    assert w.failed_tasks == 0
+    assert w.active_tasks == 0
 
 
-def test_capacity_guard_prevents_degraded_transition():
-    """With the new self-shed guard, active can never exceed max via
-    process(). The DEGRADED-on-overflow path is therefore unreachable
-    through the request flow -- DEGRADED is reserved for explicit
-    external state changes."""
+def test_status_stays_healthy_through_normal_flow():
+    """The capacity guard prevents active_tasks from ever exceeding max via
+    the request path, so the worker never auto-flips to a degraded state.
+    DEGRADED used to exist as an "overflow" status; with self-shedding it
+    became unreachable, so it was removed from the model."""
     w = GPUWorkerNode(worker_id="w", gpu_name="x", max_concurrent_tasks=2)
     w.active_tasks = 1
     w.process(_req(), context="", inference_engine=_engine())
-    # active touched 2 mid-call but never exceeded max -> stayed HEALTHY.
     assert w.status == WorkerStatus.HEALTHY
-    # Trying to process while at capacity raises WorkerAtCapacityError.
+    # Trying to process while at capacity raises WorkerAtCapacityError
+    # without changing the status.
     w.active_tasks = 2
     with pytest.raises(WorkerAtCapacityError):
         w.process(_req(), context="", inference_engine=_engine())
+    assert w.status == WorkerStatus.HEALTHY
 
 
 # ── snapshot_metrics() ────────────────────────────────────────────────────────

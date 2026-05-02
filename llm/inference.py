@@ -19,6 +19,20 @@ class LLMBackend(Protocol):
 
 
 class SimulatedLLMBackend:
+    """Sleep-based LLM stub.
+
+    `serialise=True` adds a class-level lock held during the sleep, modelling
+    a single physical GPU where calls genuinely cannot overlap. Without it,
+    sleep releases the GIL and N concurrent calls of latency T finish in T,
+    which inflates simulated throughput beyond what real hardware delivers.
+    The bench-batching comparison uses serialise=True on both sides so the
+    sim-vs-batched win is real, not an artefact of free GIL parallelism.
+    """
+
+    # Class-level lock shared across instances when serialise=True. One GPU
+    # in the simulated world.
+    _SERIAL_LOCK = threading.Lock()
+
     def __init__(
         self,
         base_latency_s: float = 0.15,
@@ -26,6 +40,7 @@ class SimulatedLLMBackend:
         jitter_s: float = 0.05,
         failure_rate: float = 0.0,
         rng_seed: int | None = None,
+        serialise: bool = False,
     ) -> None:
         if not 0.0 <= failure_rate <= 1.0:
             raise ValueError("failure_rate must be in [0.0, 1.0]")
@@ -36,6 +51,7 @@ class SimulatedLLMBackend:
         self._per_token_latency_s = per_token_latency_s
         self._jitter_s = jitter_s
         self._failure_rate = failure_rate
+        self._serialise = serialise
         self._rng = random.Random(rng_seed)
 
     def generate(self, prompt: str, context: str) -> str:
@@ -48,7 +64,11 @@ class SimulatedLLMBackend:
             0.0,
             self._base_latency_s + self._per_token_latency_s * approx_tokens + jitter,
         )
-        time.sleep(latency)
+        if self._serialise:
+            with SimulatedLLMBackend._SERIAL_LOCK:
+                time.sleep(latency)
+        else:
+            time.sleep(latency)
 
         keywords = _extract_keywords(context, limit=3)
         keyword_note = (
@@ -100,6 +120,7 @@ class BatchedSimulatedLLMBackend:
         batch_max_size: int = DEFAULT_BATCH_MAX_SIZE,
         batch_window_s: float = DEFAULT_BATCH_WINDOW_S,
         rng_seed: int | None = None,
+        serialise: bool = False,
     ) -> None:
         if not 0.0 <= failure_rate <= 1.0:
             raise ValueError("failure_rate must be in [0.0, 1.0]")
@@ -116,6 +137,7 @@ class BatchedSimulatedLLMBackend:
         self._failure_rate = failure_rate
         self._batch_max_size = batch_max_size
         self._batch_window_s = batch_window_s
+        self._serialise = serialise
 
         self._rng = random.Random(rng_seed)
         self._lock = threading.Lock()
@@ -181,7 +203,13 @@ class BatchedSimulatedLLMBackend:
             0.0,
             self._base_latency_s + self._per_token_latency_s * approx_tokens + jitter,
         )
-        time.sleep(batch_latency)
+        if self._serialise:
+            # Share the same class-level lock as SimulatedLLMBackend so a
+            # bench that mixes both classes models a single physical GPU.
+            with SimulatedLLMBackend._SERIAL_LOCK:
+                time.sleep(batch_latency)
+        else:
+            time.sleep(batch_latency)
         for event, _box in batch:
             event.set()
 
@@ -223,8 +251,8 @@ class HuggingFaceLLMBackend:
         device: str = "auto",
     ) -> None:
         try:
-            from transformers import pipeline  # type: ignore[import-not-found]
             import torch  # type: ignore[import-not-found]
+            from transformers import pipeline  # type: ignore[import-not-found]
         except ImportError as exc:
             raise LLMInferenceError(
                 "transformers is not installed. Install with "
@@ -302,14 +330,17 @@ class LLMInferenceEngine:
 
 def _default_backend_from_env() -> LLMBackend:
     backend_name = os.environ.get("LLM_BACKEND", "sim").strip().lower()
+    serialise = os.environ.get("LLM_SERIALISE", "false").strip().lower() in (
+        "1", "true", "yes", "y", "on"
+    )
     if backend_name in ("", "sim", "simulated", "fake"):
-        return SimulatedLLMBackend()
+        return SimulatedLLMBackend(serialise=serialise)
     if backend_name in ("hf", "huggingface", "transformers"):
         model_name = os.environ.get("LLM_MODEL", "distilgpt2")
         device = os.environ.get("LLM_DEVICE", "auto").strip().lower()
         return HuggingFaceLLMBackend(model_name=model_name, device=device)
     if backend_name in ("batched", "batched_sim", "batched-sim"):
-        return BatchedSimulatedLLMBackend()
+        return BatchedSimulatedLLMBackend(serialise=serialise)
     raise LLMInferenceError(
         f"Unknown LLM_BACKEND '{backend_name}'. "
         "Use 'sim', 'batched_sim', or 'hf'."

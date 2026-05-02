@@ -21,6 +21,7 @@ Endpoints:
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from time import perf_counter
 
@@ -89,6 +90,32 @@ def _on_startup() -> None:
         f"[worker-svc] {WORKER_ID} ready on {GPU_NAME} "
         f"(max_concurrent={MAX_CONCURRENT}, failure_rate={FAILURE_RATE}, "
         f"threadpool={THREADPOOL_TOKENS})"
+    )
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    """Graceful shutdown: stop accepting new work, wait for in-flight to drain.
+
+    On SIGTERM (`docker stop`, `docker compose down`, k8s preStop), uvicorn
+    fires this hook. We mark the worker draining (new requests get 503), then
+    poll until `active_tasks == 0` or the deadline elapses. Without this an
+    in-flight inference is killed mid-call and the client sees 502/connection
+    drops.
+    """
+    deadline_s = float(os.environ.get("DRAIN_DEADLINE_SEC", "30"))
+    poll_s = 0.25
+    print(f"[worker-svc] {WORKER_ID} draining (deadline={deadline_s}s)")
+    worker.begin_drain()
+    waited = 0.0
+    while waited < deadline_s:
+        if worker.active_tasks == 0:
+            break
+        await asyncio.sleep(poll_s)
+        waited += poll_s
+    print(
+        f"[worker-svc] {WORKER_ID} drain complete "
+        f"(in-flight={worker.active_tasks}, waited={waited:.1f}s)"
     )
 
 

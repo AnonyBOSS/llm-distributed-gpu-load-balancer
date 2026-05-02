@@ -11,7 +11,6 @@ from llm import LLMInferenceEngine
 
 class WorkerStatus(str, Enum):
     HEALTHY = "healthy"
-    DEGRADED = "degraded"
     FAILED = "failed"
 
 
@@ -65,9 +64,23 @@ class GPUWorkerNode:
         self.total_latency_seconds = 0.0
         self.last_latency = 0.0
         self.status: WorkerStatus = WorkerStatus.HEALTHY
+        # Graceful-shutdown flag. Once True, new requests are refused with
+        # WorkerUnavailableError so the LB falls over; in-flight requests
+        # are allowed to finish. The HTTP service waits for active_tasks
+        # to drain to 0 before exiting.
+        self._draining = False
 
         self._lock = threading.Lock()
         self._rng = random.Random(rng_seed)
+
+    def begin_drain(self) -> None:
+        """Stop accepting new work; let in-flight requests finish."""
+        with self._lock:
+            self._draining = True
+
+    @property
+    def is_draining(self) -> bool:
+        return self._draining
 
     def reserve(self) -> None:
         with self._lock:
@@ -115,11 +128,16 @@ class GPUWorkerNode:
         context: str,
         inference_engine: LLMInferenceEngine,
     ) -> str:
-        # Reject immediately if the operator has marked this node down.
-        # The scheduler's retry loop will reassign to another worker.
+        # Reject immediately if the operator has marked this node down,
+        # or if the process is draining for graceful shutdown. Either way
+        # the scheduler's retry loop will reassign to another worker.
         if self.status == WorkerStatus.FAILED:
             raise WorkerUnavailableError(
                 f"worker {self.worker_id} is marked FAILED"
+            )
+        if self._draining:
+            raise WorkerUnavailableError(
+                f"worker {self.worker_id} is draining for shutdown"
             )
 
         with self._lock:
@@ -134,11 +152,6 @@ class GPUWorkerNode:
                     f"({self.active_tasks}/{self.max_concurrent_tasks})"
                 )
             self.active_tasks += 1
-            if (
-                self.status == WorkerStatus.HEALTHY
-                and self.active_tasks > self.max_concurrent_tasks
-            ):
-                self.status = WorkerStatus.DEGRADED
 
         print(
             f"[worker:{self.worker_id}] Starting {request.request_id} on {self.gpu_name}"
@@ -174,8 +187,3 @@ class GPUWorkerNode:
         finally:
             with self._lock:
                 self.active_tasks -= 1
-                if (
-                    self.status == WorkerStatus.DEGRADED
-                    and self.active_tasks <= self.max_concurrent_tasks
-                ):
-                    self.status = WorkerStatus.HEALTHY

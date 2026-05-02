@@ -9,9 +9,9 @@ MetricsCollector and SummaryStats are also exported so the rest of the
 system (e.g. a monitoring dashboard or admin layer) can import stats
 without reaching into internal modules.
 """
-from client.generator         import ClientLoadGenerator
-from client.runner            import LoadTestRunner
-from client.metrics_collector import MetricsCollector, SummaryStats, RequestRecord
+from client.generator import ClientLoadGenerator
+from client.metrics_collector import MetricsCollector, RequestRecord, SummaryStats
+from client.runner import LoadTestRunner
 
 __all__ = [
     "ClientLoadGenerator",

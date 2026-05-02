@@ -100,7 +100,7 @@ def _parse_worker_urls() -> list[tuple[str, str]]:
     else:
         ids = [f"gpu-worker-{i + 1}" for i in range(len(urls))]
 
-    return list(zip(ids, urls))
+    return list(zip(ids, urls, strict=False))
 
 
 def _resolve_strategy(name: str) -> LoadBalancingStrategy:

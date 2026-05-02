@@ -76,8 +76,8 @@ class RAGRetriever:
             if self._index is not None:
                 return
 
-            from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
             import faiss  # type: ignore[import-not-found]
+            from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
 
             print(f"[rag] Loading embedding model '{self._model_name}'")
             model = SentenceTransformer(self._model_name)

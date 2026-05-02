@@ -7,7 +7,7 @@ import pytest
 
 from common import Request
 from lb import LoadBalancer, LoadBalancingStrategy
-from workers import GPUWorkerNode, WorkerStatus
+from workers import GPUWorkerNode
 
 
 def _req(rid: str = "r") -> Request:
@@ -115,7 +115,7 @@ def test_concurrent_least_connections_distributes():
 
     counts = {w.worker_id: picks.count(w.worker_id) for w in workers}
     # With perfect distribution each worker would get 50/3 ≈ 16.6; allow ±5.
-    for worker_id, count in counts.items():
+    for count in counts.values():
         assert 12 <= count <= 22, (
             f"thundering-herd regression: {counts} (expected ~16 per worker)"
         )
@@ -138,16 +138,9 @@ def test_release_returns_pending_to_zero():
         assert w.pending_tasks == 0
 
 
-# ── Worker selection ignores DEGRADED but not FAILED ──────────────────────────
-
-
-def test_degraded_workers_still_eligible():
-    workers = _make_workers(2)
-    workers[0].status = WorkerStatus.DEGRADED
-    lb = LoadBalancer(workers, strategy=LoadBalancingStrategy.ROUND_ROBIN)
-
-    chosen_ids = {lb.select_worker(_req(f"r{i}")).worker_id for i in range(4)}
-    assert chosen_ids == {"w0", "w1"}
+# LoadBalancer treats only FAILED as ineligible; HEALTHY workers are
+# always candidates. (DEGRADED was removed when self-shedding made the
+# overflow transition unreachable.)
 
 
 # -- Power-of-Two-Choices ------------------------------------------------------

@@ -327,7 +327,7 @@ def _save_compare_chart(rows: list[RunSummary]) -> None:
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels)
     ax1.tick_params(axis="y", labelcolor="#2b8cbe")
-    for b, v in zip(bars1, throughputs):
+    for b, v in zip(bars1, throughputs, strict=False):
         ax1.text(b.get_x() + b.get_width() / 2, v, f"{v:.0f}", ha="center", va="bottom")
 
     ax2 = ax1.twinx()
@@ -335,7 +335,7 @@ def _save_compare_chart(rows: list[RunSummary]) -> None:
                     label="p99 latency (ms)", color="#e34a33")
     ax2.set_ylabel("p99 latency (ms)", color="#e34a33")
     ax2.tick_params(axis="y", labelcolor="#e34a33")
-    for b, v in zip(bars2, p99s):
+    for b, v in zip(bars2, p99s, strict=False):
         ax2.text(b.get_x() + b.get_width() / 2, v, f"{v:.0f}", ha="center", va="bottom")
 
     users = rows[0].users

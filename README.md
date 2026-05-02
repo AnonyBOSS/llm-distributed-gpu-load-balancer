@@ -162,7 +162,7 @@ If every retry fails, the scheduler records the failure and returns a `Response`
 Public surface:
 
 - `worker_id`, `gpu_name`, `active_tasks`, `max_concurrent_tasks`
-- `status` (`HEALTHY`, `DEGRADED`, `FAILED`)
+- `status` (`HEALTHY`, `FAILED`)
 - counters: `completed_tasks`, `failed_tasks`, `total_latency_seconds`, `last_latency`
 - `process(request, context, inference_engine)` — the entry point used by the scheduler
 - `mark_failed()` / `mark_healthy()` — operator hooks used by fault-tolerance demos

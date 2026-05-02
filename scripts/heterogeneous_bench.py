@@ -40,7 +40,6 @@ from scripts.benchmark import (  # noqa: E402
     run_one,
 )
 
-
 STRATEGIES = ["round_robin", "least_connections", "load_aware", "power_of_two"]
 USER_COUNTS = [200, 500, 1000]
 
@@ -73,7 +72,6 @@ def _save_chart(rows: list[RunSummary]) -> None:
 
     CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    user_counts = sorted({r.users for r in rows})
     strategies = sorted({r.strategy for r in rows})
 
     # Two panels: throughput, p99 latency.

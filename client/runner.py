@@ -46,7 +46,6 @@ from client.config import (
 from client.generator import ClientLoadGenerator
 from client.metrics_collector import MetricsCollector, RequestRecord
 
-
 # ── Live progress reporter ────────────────────────────────────────────────────
 
 class _LiveReporter:
@@ -261,7 +260,7 @@ class LoadTestRunner:
         batch_end       = time.perf_counter()
         per_req_latency = (batch_end - batch_start) / max(num_requests, 1)
 
-        for i, (req, resp) in enumerate(zip(requests, responses)):
+        for i, (req, resp) in enumerate(zip(requests, responses, strict=False)):
             if hasattr(resp, "status"):
                 status    = resp.status
                 worker_id = getattr(resp, "worker_id", "unknown")

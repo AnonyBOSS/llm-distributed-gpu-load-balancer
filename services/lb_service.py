@@ -29,6 +29,7 @@ from fastapi import FastAPI, HTTPException
 from common.metrics import MetricsBundle
 from common.wire import RequestPayload, ResponsePayload
 from lb import LoadBalancer, LoadBalancingStrategy
+from master.health_monitor import HealthMonitor
 from workers.remote_proxy import RemoteWorkerProxy
 
 
@@ -52,6 +53,10 @@ LB_STRATEGY_RAW = os.environ.get("LB_STRATEGY", "round_robin").strip().lower()
 MASTER_MAX_INFLIGHT = _env_int("MASTER_MAX_INFLIGHT", 100)
 MASTER_HTTP_TIMEOUT = _env_float("MASTER_HTTP_TIMEOUT_SEC", 60.0)
 THREADPOOL_TOKENS = _env_int("THREADPOOL_TOKENS", 1000)
+MONITOR_INTERVAL = _env_float("MONITOR_INTERVAL_SEC", 1.0)
+MONITOR_TIMEOUT = _env_float("MONITOR_TIMEOUT_SEC", 0.5)
+MONITOR_FAIL_THRESHOLD = _env_int("MONITOR_FAIL_THRESHOLD", 3)
+MONITOR_RECOVER_THRESHOLD = _env_int("MONITOR_RECOVER_THRESHOLD", 3)
 
 
 def _parse_master_urls() -> list[tuple[str, str]]:
@@ -68,7 +73,7 @@ def _parse_master_urls() -> list[tuple[str, str]]:
     else:
         ids = [f"master-{i + 1}" for i in range(len(urls))]
 
-    return list(zip(ids, urls))
+    return list(zip(ids, urls, strict=False))
 
 
 def _resolve_strategy(name: str) -> LoadBalancingStrategy:
@@ -88,11 +93,12 @@ metrics_bundle = MetricsBundle(service="lb")
 # so the existing LoadBalancer can route to it without a separate abstraction.
 master_proxies: list[RemoteWorkerProxy] = []
 load_balancer: LoadBalancer | None = None
+monitor: HealthMonitor | None = None
 
 
 @app.on_event("startup")
-def _on_startup() -> None:
-    global master_proxies, load_balancer
+async def _on_startup() -> None:
+    global master_proxies, load_balancer, monitor
 
     anyio.to_thread.current_default_thread_limiter().total_tokens = THREADPOOL_TOKENS
 
@@ -110,14 +116,31 @@ def _on_startup() -> None:
     strategy = _resolve_strategy(LB_STRATEGY_RAW)
     load_balancer = LoadBalancer(master_proxies, strategy=strategy)  # type: ignore[arg-type]
 
+    # Active health monitor at the LB tier (mirrors master's monitor for
+    # workers). Without this, a master that recovers from a transient
+    # outage stays FAILED in the LB's view forever -- there's no path
+    # from FAILED back to HEALTHY without active probing. Same 3-strike
+    # circuit breaker semantics as the master tier.
+    monitor = HealthMonitor(
+        master_proxies,
+        poll_interval_seconds=MONITOR_INTERVAL,
+        probe_timeout_seconds=MONITOR_TIMEOUT,
+        failure_threshold=MONITOR_FAIL_THRESHOLD,
+        recovery_threshold=MONITOR_RECOVER_THRESHOLD,
+    )
+    await monitor.start()
+
     print(
         f"[lb-svc] Ready. masters={[p.worker_id for p in master_proxies]}, "
-        f"strategy={strategy.value}, threadpool={THREADPOOL_TOKENS}"
+        f"strategy={strategy.value}, threadpool={THREADPOOL_TOKENS}, "
+        f"monitor=on (interval={MONITOR_INTERVAL}s, fail={MONITOR_FAIL_THRESHOLD})"
     )
 
 
 @app.on_event("shutdown")
-def _on_shutdown() -> None:
+async def _on_shutdown() -> None:
+    if monitor is not None:
+        await monitor.stop()
     for proxy in master_proxies:
         try:
             proxy.close()
@@ -140,6 +163,7 @@ def health() -> dict[str, object]:
     return {
         "status": "ok",
         "masters": [p.snapshot_metrics() for p in master_proxies],
+        "monitor": monitor.snapshot() if monitor else [],
     }
 
 

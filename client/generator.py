@@ -16,8 +16,8 @@ import random
 import uuid
 from typing import Any
 
-from common import Request
 from client.config import SAMPLE_PROMPTS
+from common import Request
 
 
 class ClientLoadGenerator:

@@ -1,0 +1,51 @@
+# Project-wide tool configuration.
+#
+# We don't use pyproject for build (the project ships as a docker compose
+# stack, not a wheel). It's here only to centralise tool config so CI and
+# local dev share one source of truth.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+    "benchmarks/raw",
+    "benchmarks/charts",
+    "deploy",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Conservative starter rule set: pyflakes (F) catches real bugs, pycodestyle
+# warnings (W) catch obvious style issues, isort (I) keeps imports sorted,
+# bugbear (B) catches common gotchas. Wider rule sets can be added later as
+# the team gets comfortable.
+select = ["F", "W", "I", "B"]
+ignore = [
+    "B008",   # function call in default argument -- common with FastAPI
+    "B904",   # raise from -- many sites here intentionally drop the cause
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]  # `assert False` is fine in tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["common", "lb", "master", "workers", "llm", "rag"]
+omit = [
+    "*/__init__.py",
+    "tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from llm.inference import BatchedSimulatedLLMBackend
+from llm.inference import BatchedSimulatedLLMBackend, LLMInferenceError
 
 
 def _fast_backend(**kwargs) -> BatchedSimulatedLLMBackend:
@@ -71,7 +71,7 @@ def test_failure_rate_propagates():
         batch_window_s=0.005,
         rng_seed=1,
     )
-    with pytest.raises(Exception):
+    with pytest.raises(LLMInferenceError):
         b.generate("never", "")
 
 
@@ -113,3 +113,38 @@ def test_residual_batch_drains():
         results = list(pool.map(lambda i: b.generate(f"q{i}", "ctx"), range(n)))
     assert len(results) == n
     assert all("Answer to" in r for r in results)
+
+
+def test_batched_beats_serialised_sim():
+    """Apples-to-apples: with serialise=True, sim genuinely sequential and
+    batched serves N requests in N/batch_size sleeps. Batching wins."""
+    from llm.inference import SimulatedLLMBackend
+
+    seq = SimulatedLLMBackend(
+        base_latency_s=0.05, per_token_latency_s=0.0, jitter_s=0.0,
+        rng_seed=1, serialise=True,
+    )
+    bat = BatchedSimulatedLLMBackend(
+        base_latency_s=0.05, per_token_latency_s=0.0, jitter_s=0.0,
+        batch_max_size=8, batch_window_s=0.005, rng_seed=2, serialise=True,
+    )
+
+    n = 16
+
+    def time_n(backend) -> float:
+        # Warm-up
+        backend.generate("warm", "")
+        start = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=n) as pool:
+            list(pool.map(lambda i: backend.generate(f"q{i}", "ctx"), range(n)))
+        return time.perf_counter() - start
+
+    seq_time = time_n(seq)
+    bat_time = time_n(bat)
+    speedup = seq_time / max(bat_time, 1e-9)
+    # With serialise=True the sim takes ~16 * 0.05 = 0.8 s; batched takes
+    # 2 batches * 0.05 = ~0.1 s. Real speedup ~ 5-8x; require >= 3x.
+    assert speedup >= 3.0, (
+        f"expected batched >= 3x faster than serialised sim, "
+        f"got seq={seq_time:.3f}s bat={bat_time:.3f}s speedup={speedup:.2f}x"
+    )
