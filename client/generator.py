@@ -10,6 +10,7 @@ common.models.Request dataclass exactly:
 This class is the only place in the client that constructs Requests,
 so if the model ever changes you only update one file.
 """
+
 from __future__ import annotations
 
 import random
@@ -70,10 +71,10 @@ class ClientLoadGenerator:
     def _make_request(self, index: int) -> Request:
         """Build one Request with all required fields populated."""
         return Request(
-            request_id = str(uuid.uuid4()),          # globally unique
-            user_id    = f"user-{index:05d}",        # e.g. "user-00042"
-            prompt     = random.choice(self._prompts),
-            metadata   = self._build_metadata(index),
+            request_id=str(uuid.uuid4()),  # globally unique
+            user_id=f"user-{index:05d}",  # e.g. "user-00042"
+            prompt=random.choice(self._prompts),
+            metadata=self._build_metadata(index),
         )
 
     @staticmethod
@@ -83,7 +84,7 @@ class ClientLoadGenerator:
         used for tracing, priority routing, or analytics.
         """
         return {
-            "client_index"  : index,
-            "priority"      : "high" if index % 10 == 0 else "normal",
-            "source"        : "load_test",
+            "client_index": index,
+            "priority": "high" if index % 10 == 0 else "normal",
+            "source": "load_test",
         }

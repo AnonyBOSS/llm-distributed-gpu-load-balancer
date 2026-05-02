@@ -31,6 +31,7 @@ class WorkerAtCapacityError(RuntimeError):
     boundary returns 503 with a Retry-After hint so the LB tier knows
     to fall over instead of retrying the same worker.
     """
+
     pass
 
 
@@ -104,9 +105,7 @@ class GPUWorkerNode:
         with self._lock:
             total = self.completed_tasks + self.failed_tasks
             avg_latency = (
-                self.total_latency_seconds / self.completed_tasks
-                if self.completed_tasks
-                else 0.0
+                self.total_latency_seconds / self.completed_tasks if self.completed_tasks else 0.0
             )
             return {
                 "worker_id": self.worker_id,
@@ -132,13 +131,9 @@ class GPUWorkerNode:
         # or if the process is draining for graceful shutdown. Either way
         # the scheduler's retry loop will reassign to another worker.
         if self.status == WorkerStatus.FAILED:
-            raise WorkerUnavailableError(
-                f"worker {self.worker_id} is marked FAILED"
-            )
+            raise WorkerUnavailableError(f"worker {self.worker_id} is marked FAILED")
         if self._draining:
-            raise WorkerUnavailableError(
-                f"worker {self.worker_id} is draining for shutdown"
-            )
+            raise WorkerUnavailableError(f"worker {self.worker_id} is draining for shutdown")
 
         with self._lock:
             # Self-shed when already at capacity. Without this guard a worker
@@ -153,18 +148,14 @@ class GPUWorkerNode:
                 )
             self.active_tasks += 1
 
-        print(
-            f"[worker:{self.worker_id}] Starting {request.request_id} on {self.gpu_name}"
-        )
+        print(f"[worker:{self.worker_id}] Starting {request.request_id} on {self.gpu_name}")
         start = perf_counter()
 
         try:
             # Failure-rate roll lives INSIDE the try so the finally block
             # still decrements active_tasks on an injected failure.
             if self._rng.random() < self.failure_rate:
-                raise WorkerTransientError(
-                    f"injected transient failure on {self.worker_id}"
-                )
+                raise WorkerTransientError(f"injected transient failure on {self.worker_id}")
 
             answer = inference_engine.generate(request, context)
             latency = perf_counter() - start
@@ -174,10 +165,7 @@ class GPUWorkerNode:
                 self.last_latency = latency
                 self.total_latency_seconds += latency
 
-            print(
-                f"[worker:{self.worker_id}] Finished {request.request_id} "
-                f"in {latency:.3f}s"
-            )
+            print(f"[worker:{self.worker_id}] Finished {request.request_id} " f"in {latency:.3f}s")
             return answer
         except Exception:
             with self._lock:

@@ -20,9 +20,9 @@ def main() -> None:
     workers = build_workers()
     generator = ClientLoadGenerator()
     load_balancer = LoadBalancer(
-    workers,
-    strategy=LoadBalancingStrategy.LOAD_AWARE,
-)
+        workers,
+        strategy=LoadBalancingStrategy.LOAD_AWARE,
+    )
     # use_stub=True keeps the dry-run sub-second by skipping the FAISS model download.
     # Scripts that exercise real vector retrieval should instantiate RAGRetriever()
     # with the default arguments.

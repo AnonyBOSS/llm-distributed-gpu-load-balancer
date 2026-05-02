@@ -4,6 +4,7 @@ Tests the FAILED/HEALTHY transition logic directly via _on_success /
 _on_failure to keep the suite fast and asyncio-free. The end-to-end async
 HTTP path is covered by tests/integration/test_distributed.py.
 """
+
 from __future__ import annotations
 
 import pytest

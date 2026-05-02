@@ -19,6 +19,7 @@ Then:
 Saves benchmarks/heterogeneous_results.csv and one chart at
 benchmarks/charts/heterogeneous_strategy_comparison.png.
 """
+
 from __future__ import annotations
 
 import csv
@@ -49,24 +50,37 @@ def _save_csv(rows: list[RunSummary]) -> Path:
     path = OUT_DIR / "heterogeneous_results.csv"
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "strategy", "users", "throughput_rps", "p50_ms", "p95_ms", "p99_ms",
-            "errors", "worker_dist",
-        ])
+        writer.writerow(
+            [
+                "strategy",
+                "users",
+                "throughput_rps",
+                "p50_ms",
+                "p95_ms",
+                "p99_ms",
+                "errors",
+                "worker_dist",
+            ]
+        )
         for r in rows:
-            writer.writerow([
-                r.strategy, r.users, round(r.throughput_rps, 2),
-                round(r.p50_seconds * 1000, 1),
-                round(r.p95_seconds * 1000, 1),
-                round(r.p99_seconds * 1000, 1),
-                r.errors,
-                r.worker_distribution,
-            ])
+            writer.writerow(
+                [
+                    r.strategy,
+                    r.users,
+                    round(r.throughput_rps, 2),
+                    round(r.p50_seconds * 1000, 1),
+                    round(r.p95_seconds * 1000, 1),
+                    round(r.p99_seconds * 1000, 1),
+                    r.errors,
+                    r.worker_distribution,
+                ]
+            )
     return path
 
 
 def _save_chart(rows: list[RunSummary]) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 

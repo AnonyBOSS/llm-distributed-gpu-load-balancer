@@ -1,4 +1,5 @@
 """Continuous-batching backend correctness + amortisation."""
+
 from __future__ import annotations
 
 import threading
@@ -121,12 +122,20 @@ def test_batched_beats_serialised_sim():
     from llm.inference import SimulatedLLMBackend
 
     seq = SimulatedLLMBackend(
-        base_latency_s=0.05, per_token_latency_s=0.0, jitter_s=0.0,
-        rng_seed=1, serialise=True,
+        base_latency_s=0.05,
+        per_token_latency_s=0.0,
+        jitter_s=0.0,
+        rng_seed=1,
+        serialise=True,
     )
     bat = BatchedSimulatedLLMBackend(
-        base_latency_s=0.05, per_token_latency_s=0.0, jitter_s=0.0,
-        batch_max_size=8, batch_window_s=0.005, rng_seed=2, serialise=True,
+        base_latency_s=0.05,
+        per_token_latency_s=0.0,
+        jitter_s=0.0,
+        batch_max_size=8,
+        batch_window_s=0.005,
+        rng_seed=2,
+        serialise=True,
     )
 
     n = 16

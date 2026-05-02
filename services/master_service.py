@@ -27,6 +27,7 @@ Endpoints:
     GET  /workers         — list of known workers + their cached state
     POST /request         — handle one client request end-to-end
 """
+
 from __future__ import annotations
 
 import os
@@ -94,9 +95,7 @@ def _parse_worker_urls() -> list[tuple[str, str]]:
     if WORKER_IDS_RAW:
         ids = [i.strip() for i in WORKER_IDS_RAW.split(",") if i.strip()]
         if len(ids) != len(urls):
-            raise RuntimeError(
-                f"WORKER_IDS has {len(ids)} entries but WORKER_URLS has {len(urls)}"
-            )
+            raise RuntimeError(f"WORKER_IDS has {len(ids)} entries but WORKER_URLS has {len(urls)}")
     else:
         ids = [f"gpu-worker-{i + 1}" for i in range(len(urls))]
 
@@ -108,9 +107,7 @@ def _resolve_strategy(name: str) -> LoadBalancingStrategy:
         return LoadBalancingStrategy(name)
     except ValueError as exc:
         valid = [s.value for s in LoadBalancingStrategy]
-        raise RuntimeError(
-            f"LB_STRATEGY={name!r} invalid. Valid: {valid}"
-        ) from exc
+        raise RuntimeError(f"LB_STRATEGY={name!r} invalid. Valid: {valid}") from exc
 
 
 app = FastAPI(title="master")

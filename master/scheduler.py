@@ -172,8 +172,7 @@ class MasterScheduler:
                     self._worker_failures.get(worker.worker_id, 0) + 1
                 )
                 print(
-                    f"[master] Worker {worker.worker_id} failed for "
-                    f"{request.request_id}: {exc}"
+                    f"[master] Worker {worker.worker_id} failed for " f"{request.request_id}: {exc}"
                 )
             finally:
                 worker.release()

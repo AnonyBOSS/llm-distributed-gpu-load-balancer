@@ -15,6 +15,7 @@ on), then POSTs one real inference through the LB and prints the answer +
 latency. If you've never run distilgpt2 on this host, the very first
 request includes a one-time model download — expect 10-30 s.
 """
+
 from __future__ import annotations
 
 import sys

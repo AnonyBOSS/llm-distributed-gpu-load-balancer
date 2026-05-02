@@ -1,4 +1,5 @@
 """MasterScheduler retry, fallover, RAG, and reservation handling."""
+
 from __future__ import annotations
 
 import pytest
@@ -53,7 +54,10 @@ def test_failed_explicit_worker_falls_over_to_healthy():
     alive = GPUWorkerNode(worker_id="alive", gpu_name="x")
     dead.mark_failed()
     sched = MasterScheduler(
-        _retriever(), _engine(), workers=[dead, alive], max_retries=1,
+        _retriever(),
+        _engine(),
+        workers=[dead, alive],
+        max_retries=1,
     )
     resp = sched.handle_request(_req(), worker=dead)
     assert resp.status == "completed"
@@ -66,7 +70,10 @@ def test_failed_explicit_worker_falls_over_to_healthy():
 def test_all_workers_failing_returns_failed_status():
     workers = [
         GPUWorkerNode(
-            worker_id=f"w{i}", gpu_name="x", failure_rate=1.0, rng_seed=i,
+            worker_id=f"w{i}",
+            gpu_name="x",
+            failure_rate=1.0,
+            rng_seed=i,
         )
         for i in range(2)
     ]
@@ -136,7 +143,10 @@ def test_at_capacity_worker_falls_over_without_consuming_retries():
     # max_retries=0 means only one *failure* attempt is allowed -- if the
     # at-capacity rejection counted as a failure, we'd give up after busy.
     sched = MasterScheduler(
-        _retriever(), _engine(), workers=[busy, free], max_retries=0,
+        _retriever(),
+        _engine(),
+        workers=[busy, free],
+        max_retries=0,
     )
     resp = sched.handle_request(_req(), worker=busy)
 

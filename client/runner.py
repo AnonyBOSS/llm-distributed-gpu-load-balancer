@@ -25,6 +25,7 @@ Supports two modes
 flat     — all N users fire simultaneously (default)
 ramp_up  — gradually steps through RAMP_UP_STEPS, pausing between each
 """
+
 from __future__ import annotations
 
 import threading
@@ -48,14 +49,15 @@ from client.metrics_collector import MetricsCollector, RequestRecord
 
 # ── Live progress reporter ────────────────────────────────────────────────────
 
+
 class _LiveReporter:
     """Prints a one-line animated progress bar in a background daemon thread."""
 
     def __init__(self, collector: MetricsCollector, total: int) -> None:
-        self._c     = collector
+        self._c = collector
         self._total = total
-        self._stop  = threading.Event()
-        self._t     = threading.Thread(target=self._run, daemon=True)
+        self._stop = threading.Event()
+        self._t = threading.Thread(target=self._run, daemon=True)
 
     def start(self) -> None:
         self._t.start()
@@ -63,34 +65,36 @@ class _LiveReporter:
     def stop(self) -> None:
         self._stop.set()
         self._t.join(timeout=2)
-        print()     # newline after the progress bar
+        print()  # newline after the progress bar
 
     def _run(self) -> None:
         t0 = time.perf_counter()
         while not self._stop.is_set():
-            done    = self._c.total_completed
-            ok      = self._c.total_successful
+            done = self._c.total_completed
+            ok = self._c.total_successful
             elapsed = time.perf_counter() - t0
-            rps     = done / max(elapsed, 1e-6)
-            pct     = done / max(self._total, 1) * 100
-            filled  = int(30 * done / max(self._total, 1))
-            bar     = "█" * filled + "░" * (30 - filled)
+            rps = done / max(elapsed, 1e-6)
+            pct = done / max(self._total, 1) * 100
+            filled = int(30 * done / max(self._total, 1))
+            bar = "█" * filled + "░" * (30 - filled)
             print(
                 f"\r[live] [{bar}] {pct:5.1f}%  "
                 f"{done}/{self._total} req  ok={ok}  "
                 f"rps={rps:.1f}  t={elapsed:.1f}s",
-                end="", flush=True,
+                end="",
+                flush=True,
             )
             self._stop.wait(REPORT_INTERVAL_SEC)
 
 
 # ── Per-user task (runs inside thread pool) ───────────────────────────────────
 
+
 def _run_single_user(
-    index     : int,
-    generator : ClientLoadGenerator,
-    scheduler,              # master.Scheduler — exposes handle_request(request)
-    collector : MetricsCollector,
+    index: int,
+    generator: ClientLoadGenerator,
+    scheduler,  # master.Scheduler — exposes handle_request(request)
+    collector: MetricsCollector,
 ) -> None:
     """
     Simulate one user, aligned with the PDF skeleton's Scheduler interface:
@@ -104,20 +108,18 @@ def _run_single_user(
     Retried up to MAX_RETRIES times on transient failures, with exponential
     back-off. Abandoned as "timeout" if total elapsed exceeds REQUEST_TIMEOUT_SEC.
     """
-    request   = generator.generate_requests(count=1)[0]
-    status    = "error"
+    request = generator.generate_requests(count=1)[0]
+    status = "error"
     worker_id = "unassigned"
-    start     = time.perf_counter()
+    start = time.perf_counter()
 
     for attempt in range(MAX_RETRIES + 1):
-
         # ── Timeout guard ────────────────────────────────────────────────────
         elapsed = time.perf_counter() - start
         if elapsed >= REQUEST_TIMEOUT_SEC:
             status = "timeout"
             print(
-                f"[runner] user-{index:05d} timed out after "
-                f"{elapsed:.1f}s (attempt {attempt})"
+                f"[runner] user-{index:05d} timed out after " f"{elapsed:.1f}s (attempt {attempt})"
             )
             break
 
@@ -130,20 +132,20 @@ def _run_single_user(
             # Handle both the extended Response dataclass and the dict the
             # skeleton's GPUWorker.process() returns {"id", "result", "latency"}
             if hasattr(response, "status"):
-                status    = response.status                      # "completed" | "failed"
+                status = response.status  # "completed" | "failed"
                 worker_id = getattr(response, "worker_id", "unknown")
             elif isinstance(response, dict):
-                status    = response.get("status", "completed")
+                status = response.get("status", "completed")
                 worker_id = str(response.get("id", "unknown"))
             else:
                 status = "completed"
 
             if status == "completed":
-                break   # success — no retry needed
+                break  # success — no retry needed
 
             # Worker returned "failed" → retry if attempts remain
             if attempt < MAX_RETRIES:
-                backoff = RETRY_BACKOFF_SEC * (2 ** attempt)
+                backoff = RETRY_BACKOFF_SEC * (2**attempt)
                 print(
                     f"[runner] user-{index:05d} got '{status}', "
                     f"retrying in {backoff:.2f}s "
@@ -160,30 +162,27 @@ def _run_single_user(
         except Exception as exc:
             status = "error"
             if attempt < MAX_RETRIES:
-                backoff = RETRY_BACKOFF_SEC * (2 ** attempt)
-                print(
-                    f"[runner] user-{index:05d} error ({exc}), "
-                    f"retrying in {backoff:.2f}s"
-                )
+                backoff = RETRY_BACKOFF_SEC * (2**attempt)
+                print(f"[runner] user-{index:05d} error ({exc}), " f"retrying in {backoff:.2f}s")
                 time.sleep(backoff)
             else:
-                print(
-                    f"[runner] user-{index:05d} gave up after "
-                    f"{MAX_RETRIES} retries: {exc}"
-                )
+                print(f"[runner] user-{index:05d} gave up after " f"{MAX_RETRIES} retries: {exc}")
 
     latency = time.perf_counter() - start
-    collector.record(RequestRecord(
-        request_id  = request.request_id,
-        user_id     = request.user_id,
-        status      = status,
-        latency_sec = latency,
-        worker_id   = worker_id,
-        timestamp   = time.time(),
-    ))
+    collector.record(
+        RequestRecord(
+            request_id=request.request_id,
+            user_id=request.user_id,
+            status=status,
+            latency_sec=latency,
+            worker_id=worker_id,
+            timestamp=time.time(),
+        )
+    )
 
 
 # ── Public runner ─────────────────────────────────────────────────────────────
+
 
 class LoadTestRunner:
     """
@@ -217,7 +216,7 @@ class LoadTestRunner:
     def run(
         self,
         num_users: int = DEFAULT_NUM_USERS,
-        ramp_up  : bool = False,
+        ramp_up: bool = False,
     ) -> MetricsCollector:
         """
         Run the load test and return the populated MetricsCollector.
@@ -257,28 +256,30 @@ class LoadTestRunner:
 
         responses = self._scheduler.handle_batch(requests)
 
-        batch_end       = time.perf_counter()
+        batch_end = time.perf_counter()
         per_req_latency = (batch_end - batch_start) / max(num_requests, 1)
 
         for i, (req, resp) in enumerate(zip(requests, responses, strict=False)):
             if hasattr(resp, "status"):
-                status    = resp.status
+                status = resp.status
                 worker_id = getattr(resp, "worker_id", "unknown")
             elif isinstance(resp, dict):
-                status    = resp.get("status", "completed")
+                status = resp.get("status", "completed")
                 worker_id = str(resp.get("id", "unknown"))
             else:
-                status    = "completed"
+                status = "completed"
                 worker_id = "unknown"
 
-            self._collector.record(RequestRecord(
-                request_id  = req.request_id,
-                user_id     = req.user_id,
-                status      = status,
-                latency_sec = per_req_latency * (i + 1),
-                worker_id   = worker_id,
-                timestamp   = time.time(),
-            ))
+            self._collector.record(
+                RequestRecord(
+                    request_id=req.request_id,
+                    user_id=req.user_id,
+                    status=status,
+                    latency_sec=per_req_latency * (i + 1),
+                    worker_id=worker_id,
+                    timestamp=time.time(),
+                )
+            )
 
         self._collector.stop()
         self._collector.print_summary()
@@ -304,12 +305,15 @@ class LoadTestRunner:
             futures = [
                 pool.submit(
                     _run_single_user,
-                    i, self._generator, self._scheduler, self._collector,
+                    i,
+                    self._generator,
+                    self._scheduler,
+                    self._collector,
                 )
                 for i in range(num_users)
             ]
             for f in as_completed(futures):
-                f.result()      # surface unhandled exceptions immediately
+                f.result()  # surface unhandled exceptions immediately
 
         reporter.stop()
 
@@ -337,7 +341,9 @@ class LoadTestRunner:
                     pool.submit(
                         _run_single_user,
                         submitted + i,
-                        self._generator, self._scheduler, self._collector,
+                        self._generator,
+                        self._scheduler,
+                        self._collector,
                     )
                     for i in range(batch)
                 ]

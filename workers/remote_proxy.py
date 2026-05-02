@@ -6,6 +6,7 @@ so `LoadBalancer` and `MasterScheduler` can use it without changes. The proxy
 tracks `pending_tasks` locally so LB selection stays a single in-process
 decision (no extra round-trip per request).
 """
+
 from __future__ import annotations
 
 import threading
@@ -135,9 +136,7 @@ class RemoteWorkerProxy:
         del inference_engine
 
         if self.status == WorkerStatus.FAILED:
-            raise WorkerUnavailableError(
-                f"remote worker {self.worker_id} is marked FAILED"
-            )
+            raise WorkerUnavailableError(f"remote worker {self.worker_id} is marked FAILED")
 
         with self._lock:
             self.active_tasks += 1
@@ -160,9 +159,7 @@ class RemoteWorkerProxy:
                 response.status_code == 503
                 and response.headers.get("X-Reject-Reason") == "at-capacity"
             ):
-                raise WorkerAtCapacityError(
-                    f"remote {self.worker_id} reports at-capacity"
-                )
+                raise WorkerAtCapacityError(f"remote {self.worker_id} reports at-capacity")
             response.raise_for_status()
             body = ProcessResponse.model_validate(response.json())
             latency = perf_counter() - start
@@ -184,9 +181,7 @@ class RemoteWorkerProxy:
                 self._consecutive_failures += 1
                 if self._consecutive_failures >= self._failure_threshold:
                     self.status = WorkerStatus.FAILED
-            raise WorkerTransientError(
-                f"remote {self.worker_id} HTTP failure: {exc}"
-            ) from exc
+            raise WorkerTransientError(f"remote {self.worker_id} HTTP failure: {exc}") from exc
         finally:
             with self._lock:
                 self.active_tasks -= 1
@@ -195,8 +190,7 @@ class RemoteWorkerProxy:
         with self._lock:
             total = self.completed_tasks + self.failed_tasks
             avg_latency = (
-                self.total_latency_seconds / self.completed_tasks
-                if self.completed_tasks else 0.0
+                self.total_latency_seconds / self.completed_tasks if self.completed_tasks else 0.0
             )
             return {
                 "worker_id": self.worker_id,

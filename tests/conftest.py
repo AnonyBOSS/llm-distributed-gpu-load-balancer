@@ -4,6 +4,7 @@ Adds the project root to sys.path so `from workers import ...` works when
 pytest is invoked from any cwd. Mirrors what scripts/smoke_concurrent.py
 already does at runtime.
 """
+
 from __future__ import annotations
 
 import sys

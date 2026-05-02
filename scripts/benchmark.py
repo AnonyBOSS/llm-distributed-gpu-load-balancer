@@ -21,6 +21,7 @@ Then:
     python scripts/benchmark.py --quick           # 50 + 200 only, single strategy
     python scripts/benchmark.py --no-fault        # skip fault-injection run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -102,8 +103,10 @@ def _set_backend(backend: str) -> None:
         result = r.json()
         bad = {k: v for k, v in result["workers"].items() if isinstance(v, dict) and "error" in v}
         ok_count = len(result["workers"]) - len(bad)
-        print(f"[bench] backend -> {backend} on {ok_count} workers"
-              + (f" (failures: {bad})" if bad else ""))
+        print(
+            f"[bench] backend -> {backend} on {ok_count} workers"
+            + (f" (failures: {bad})" if bad else "")
+        )
 
 
 def _fire_one(client: httpx.Client, i: int) -> RequestResult:
@@ -146,12 +149,12 @@ def _fire_one(client: httpx.Client, i: int) -> RequestResult:
                 )
             if r.status_code in (502, 503) and attempt + 1 < max_attempts:
                 # capacity-related; retry with exponential backoff + jitter
-                time.sleep(backoff * (2 ** attempt) + 0.001 * (i % 10))
+                time.sleep(backoff * (2**attempt) + 0.001 * (i % 10))
                 continue
             break
         except httpx.HTTPError:
             if attempt + 1 < max_attempts:
-                time.sleep(backoff * (2 ** attempt))
+                time.sleep(backoff * (2**attempt))
                 continue
             break
     return RequestResult(
@@ -191,9 +194,7 @@ def _recover_fault() -> None:
             try:
                 with httpx.Client(timeout=2.0) as c:
                     body = c.get(f"{MASTER_URL}/health").json()
-                states = {
-                    row["worker_id"]: row["status"] for row in body.get("monitor", [])
-                }
+                states = {row["worker_id"]: row["status"] for row in body.get("monitor", [])}
                 if all(s == "healthy" for s in states.values()):
                     print(f"[bench] all workers HEALTHY: {states}")
                     return
@@ -212,8 +213,7 @@ def run_one(
     fault_after: int | None = None,
 ) -> tuple[RunSummary, list[RequestResult]]:
     print(
-        f"[bench] === RUN strategy={strategy} users={num_users} "
-        f"fault_after={fault_after} ==="
+        f"[bench] === RUN strategy={strategy} users={num_users} " f"fault_after={fault_after} ==="
     )
     _set_strategy(strategy)
 
@@ -227,11 +227,7 @@ def run_one(
             t0 = time.perf_counter()
             for fut in as_completed(futures):
                 results.append(fut.result())
-                if (
-                    fault_after is not None
-                    and not fault_triggered
-                    and len(results) >= fault_after
-                ):
+                if fault_after is not None and not fault_triggered and len(results) >= fault_after:
                     _inject_fault()
                     fault_triggered = True
             elapsed = time.perf_counter() - t0
@@ -285,23 +281,39 @@ def _save_csv(rows: list[RunSummary], filename: str = "results.csv") -> Path:
     path = OUT_DIR / filename
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "strategy", "users", "fault",
-            "elapsed_sec", "throughput_rps", "successful", "errors", "error_rate",
-            "p50_ms", "p95_ms", "p99_ms",
-            "worker_dist",
-        ])
+        writer.writerow(
+            [
+                "strategy",
+                "users",
+                "fault",
+                "elapsed_sec",
+                "throughput_rps",
+                "successful",
+                "errors",
+                "error_rate",
+                "p50_ms",
+                "p95_ms",
+                "p99_ms",
+                "worker_dist",
+            ]
+        )
         for r in rows:
-            writer.writerow([
-                r.strategy, r.users, r.fault,
-                round(r.elapsed_seconds, 3),
-                round(r.throughput_rps, 2),
-                r.successful, r.errors, round(r.error_rate, 4),
-                round(r.p50_seconds * 1000, 1),
-                round(r.p95_seconds * 1000, 1),
-                round(r.p99_seconds * 1000, 1),
-                json.dumps(r.worker_distribution, sort_keys=True),
-            ])
+            writer.writerow(
+                [
+                    r.strategy,
+                    r.users,
+                    r.fault,
+                    round(r.elapsed_seconds, 3),
+                    round(r.throughput_rps, 2),
+                    r.successful,
+                    r.errors,
+                    round(r.error_rate, 4),
+                    round(r.p50_seconds * 1000, 1),
+                    round(r.p95_seconds * 1000, 1),
+                    round(r.p99_seconds * 1000, 1),
+                    json.dumps(r.worker_distribution, sort_keys=True),
+                ]
+            )
     return path
 
 
@@ -310,6 +322,7 @@ def _save_compare_chart(rows: list[RunSummary]) -> None:
     if not rows:
         return
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -321,8 +334,13 @@ def _save_compare_chart(rows: list[RunSummary]) -> None:
     fig, ax1 = plt.subplots(figsize=(8, 5))
     x = list(range(len(labels)))
     width = 0.35
-    bars1 = ax1.bar([i - width / 2 for i in x], throughputs, width=width,
-                    label="throughput (rps)", color="#2b8cbe")
+    bars1 = ax1.bar(
+        [i - width / 2 for i in x],
+        throughputs,
+        width=width,
+        label="throughput (rps)",
+        color="#2b8cbe",
+    )
     ax1.set_ylabel("Throughput (req/s)", color="#2b8cbe")
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels)
@@ -331,8 +349,9 @@ def _save_compare_chart(rows: list[RunSummary]) -> None:
         ax1.text(b.get_x() + b.get_width() / 2, v, f"{v:.0f}", ha="center", va="bottom")
 
     ax2 = ax1.twinx()
-    bars2 = ax2.bar([i + width / 2 for i in x], p99s, width=width,
-                    label="p99 latency (ms)", color="#e34a33")
+    bars2 = ax2.bar(
+        [i + width / 2 for i in x], p99s, width=width, label="p99 latency (ms)", color="#e34a33"
+    )
     ax2.set_ylabel("p99 latency (ms)", color="#e34a33")
     ax2.tick_params(axis="y", labelcolor="#e34a33")
     for b, v in zip(bars2, p99s, strict=False):
@@ -347,6 +366,7 @@ def _save_compare_chart(rows: list[RunSummary]) -> None:
 
 def _draw_charts(rows: list[RunSummary], fault_results: list[RequestResult] | None) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -390,9 +410,7 @@ def _draw_charts(rows: list[RunSummary], fault_results: list[RequestResult] | No
     largest = max(user_counts) if user_counts else 0
     plt.figure(figsize=(9, 5))
     width = 0.25
-    workers = sorted(
-        {w for r in clean_rows if r.users == largest for w in r.worker_distribution}
-    )
+    workers = sorted({w for r in clean_rows if r.users == largest for w in r.worker_distribution})
     for idx, s in enumerate(strategies):
         for r in clean_rows:
             if r.strategy == s and r.users == largest:
@@ -422,16 +440,12 @@ def _draw_charts(rows: list[RunSummary], fault_results: list[RequestResult] | No
             return
         max_offset = sorted_results[-1].timestamp - t0
         bins = [
-            (i * bin_width, (i + 1) * bin_width)
-            for i in range(int(max_offset / bin_width) + 1)
+            (i * bin_width, (i + 1) * bin_width) for i in range(int(max_offset / bin_width) + 1)
         ]
         bin_rates = []
         bin_centers = []
         for lo, hi in bins:
-            window = [
-                r for r in sorted_results
-                if lo <= (r.timestamp - t0) < hi
-            ]
+            window = [r for r in sorted_results if lo <= (r.timestamp - t0) < hi]
             if not window:
                 continue
             errors = sum(1 for r in window if r.status_code != 200)
@@ -474,8 +488,7 @@ def _gpu_preflight(user_counts: list[int]) -> None:
     """
     try:
         out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=memory.free,memory.total",
-             "--format=csv,noheader,nounits"],
+            ["nvidia-smi", "--query-gpu=memory.free,memory.total", "--format=csv,noheader,nounits"],
             text=True,
             timeout=5,
         ).strip()
@@ -492,9 +505,7 @@ def _gpu_preflight(user_counts: list[int]) -> None:
         print(f"[bench] could not parse nvidia-smi output: {first_line!r}; skipping pre-flight")
         return
 
-    print(
-        f"[bench] GPU memory: free={free_mib} MiB / total={total_mib} MiB"
-    )
+    print(f"[bench] GPU memory: free={free_mib} MiB / total={total_mib} MiB")
 
     # Heuristic budget: each concurrent in-flight request can grow KV-cache
     # by tens of MB; 1 MB per token at most for small models. Reserve 200 MB
@@ -566,10 +577,13 @@ def main() -> None:
         choices=["sim", "gpu"],
         default="sim",
         help="'gpu' assumes deploy/docker-compose.gpu.yml is up: smaller user "
-             "counts, results saved to results_gpu.csv",
+        "counts, results saved to results_gpu.csv",
     )
-    parser.add_argument("--quick", action="store_true",
-                        help="shortcut: --user-counts=50,200 --strategies=load_aware --no-fault")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="shortcut: --user-counts=50,200 --strategies=load_aware --no-fault",
+    )
     args = parser.parse_args()
 
     if args.quick:
@@ -602,7 +616,9 @@ def main() -> None:
         try:
             _set_backend(args.backend)
         except httpx.HTTPError as exc:
-            print(f"[bench] WARNING: could not set backend ({exc}); continuing with whatever the workers already have")
+            print(
+                f"[bench] WARNING: could not set backend ({exc}); continuing with whatever the workers already have"
+            )
     else:
         print("[bench] --mode gpu: leaving workers on their compose-configured HF backend")
 

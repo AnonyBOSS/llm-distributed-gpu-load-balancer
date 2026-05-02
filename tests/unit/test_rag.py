@@ -1,4 +1,5 @@
 """RAG retriever stub determinism + corpus shape."""
+
 from __future__ import annotations
 
 import pytest

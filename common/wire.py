@@ -5,6 +5,7 @@ by the scheduler / worker / LB. These Pydantic models exist only at the
 FastAPI service boundary for validation + JSON (de)serialization. Conversion
 is one line in each direction.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -71,6 +72,7 @@ class ResponsePayload(BaseModel):
 
 class ProcessRequest(BaseModel):
     """Body of POST /process on a worker service."""
+
     model_config = ConfigDict(extra="forbid")
 
     request: RequestPayload
@@ -79,6 +81,7 @@ class ProcessRequest(BaseModel):
 
 class ProcessResponse(BaseModel):
     """Body returned by POST /process on a worker service."""
+
     model_config = ConfigDict(extra="forbid")
 
     worker_id: str
@@ -88,6 +91,7 @@ class ProcessResponse(BaseModel):
 
 class WorkerHealth(BaseModel):
     """Body returned by GET /health on a worker service."""
+
     model_config = ConfigDict(extra="allow")  # tolerate extra metric fields
 
     worker_id: str

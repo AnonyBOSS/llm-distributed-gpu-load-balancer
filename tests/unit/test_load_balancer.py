@@ -1,4 +1,5 @@
 """LoadBalancer correctness + thundering-herd regression."""
+
 from __future__ import annotations
 
 import threading
@@ -16,9 +17,7 @@ def _req(rid: str = "r") -> Request:
 
 def _make_workers(n: int = 3, max_concurrent: int = 8) -> list[GPUWorkerNode]:
     return [
-        GPUWorkerNode(
-            worker_id=f"w{i}", gpu_name="sim", max_concurrent_tasks=max_concurrent
-        )
+        GPUWorkerNode(worker_id=f"w{i}", gpu_name="sim", max_concurrent_tasks=max_concurrent)
         for i in range(n)
     ]
 
@@ -116,9 +115,7 @@ def test_concurrent_least_connections_distributes():
     counts = {w.worker_id: picks.count(w.worker_id) for w in workers}
     # With perfect distribution each worker would get 50/3 ≈ 16.6; allow ±5.
     for count in counts.values():
-        assert 12 <= count <= 22, (
-            f"thundering-herd regression: {counts} (expected ~16 per worker)"
-        )
+        assert 12 <= count <= 22, f"thundering-herd regression: {counts} (expected ~16 per worker)"
 
     # Each select_worker() reserved its pick. pending_tasks should equal the
     # picks per worker until callers release.
@@ -165,9 +162,7 @@ def test_power_of_two_picks_less_loaded_under_skew():
     # P2C never picks the hottest worker unless both samples ARE the hottest,
     # which can't happen because there's only one of it. Expected: w0 ~ 0,
     # w1 + w2 ~ n.
-    assert counts["w0"] < n // 10, (
-        f"P2C picked the hot worker {counts['w0']} / {n} times: {counts}"
-    )
+    assert counts["w0"] < n // 10, f"P2C picked the hot worker {counts['w0']} / {n} times: {counts}"
 
 
 def test_power_of_two_handles_single_worker():

@@ -18,6 +18,7 @@ Ch. "Managing Load"). The two layers are deliberately independent:
 Independence matters because each layer has different MTTR characteristics
 and they fail open in different scenarios.
 """
+
 from __future__ import annotations
 
 import asyncio

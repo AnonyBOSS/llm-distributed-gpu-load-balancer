@@ -38,8 +38,7 @@ class RAGRetriever:
         if self._use_stub:
             doc = self._corpus[abs(hash(request.request_id)) % len(self._corpus)]
             print(
-                f"[rag] Retrieved stub context for {request.request_id} "
-                f"(doc_id={doc.doc_id})"
+                f"[rag] Retrieved stub context for {request.request_id} " f"(doc_id={doc.doc_id})"
             )
             return f"{doc.title}\n{doc.text}"
 
@@ -94,7 +93,4 @@ class RAGRetriever:
 
             self._model = model
             self._index = index
-            print(
-                f"[rag] Indexed {len(self._corpus)} documents "
-                f"(dim={embeddings.shape[1]})"
-            )
+            print(f"[rag] Indexed {len(self._corpus)} documents " f"(dim={embeddings.shape[1]})")

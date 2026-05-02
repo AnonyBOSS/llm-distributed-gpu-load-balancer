@@ -1,4 +1,5 @@
 """GPUWorkerNode capacity, health-state, reservation, and metrics."""
+
 from __future__ import annotations
 
 import pytest
@@ -148,9 +149,17 @@ def test_snapshot_keys_present():
     w.process(_req(), context="", inference_engine=_engine())
     snap = w.snapshot_metrics()
     expected = {
-        "worker_id", "gpu_name", "status", "active_tasks", "pending_tasks",
-        "max_concurrent_tasks", "completed_tasks", "failed_tasks",
-        "total_tasks", "avg_latency_seconds", "last_latency_seconds",
+        "worker_id",
+        "gpu_name",
+        "status",
+        "active_tasks",
+        "pending_tasks",
+        "max_concurrent_tasks",
+        "completed_tasks",
+        "failed_tasks",
+        "total_tasks",
+        "avg_latency_seconds",
+        "last_latency_seconds",
     }
     assert expected.issubset(snap.keys())
     assert snap["completed_tasks"] == 1

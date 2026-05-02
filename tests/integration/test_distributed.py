@@ -9,6 +9,7 @@ The test verifies (1) the full chain serves traffic, (2) Prometheus is
 scraping every service, and (3) the master's active health monitor flips
 a stopped worker FAILED then recovers it when restarted.
 """
+
 from __future__ import annotations
 
 import os
@@ -106,9 +107,12 @@ def test_health_monitor_detects_killed_worker_and_recovers():
     def _list_master_view() -> dict[str, str]:
         proc = subprocess.run(
             ["docker", "exec", "deploy-master-1", "curl", "-s", "http://localhost:9000/health"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         import json
+
         body = json.loads(proc.stdout)
         return {row["worker_id"]: row["status"] for row in body["monitor"]}
 

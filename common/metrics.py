@@ -5,6 +5,7 @@ calls `bundle.handler()` from a `/metrics` endpoint. The metric *names*
 and *label keys* are standardised here so a single Grafana dashboard can
 graph every service consistently.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -23,7 +24,18 @@ from starlette.responses import Response
 
 # Histogram buckets covering simulated (~0.2 s) and HF (~30 s) latencies.
 LATENCY_BUCKETS = (
-    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
+    30.0,
 )
 
 
@@ -103,9 +115,7 @@ class MetricsBundle:
         active_tasks: int,
         pending_tasks: int,
     ) -> None:
-        self.target_status.labels(self.service, target).set(
-            STATUS_VALUE.get(status, 2)
-        )
+        self.target_status.labels(self.service, target).set(STATUS_VALUE.get(status, 2))
         self.target_active_tasks.labels(self.service, target).set(active_tasks)
         self.target_pending_tasks.labels(self.service, target).set(pending_tasks)
 

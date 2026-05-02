@@ -71,9 +71,7 @@ class SimulatedLLMBackend:
             time.sleep(latency)
 
         keywords = _extract_keywords(context, limit=3)
-        keyword_note = (
-            f"grounded in {', '.join(keywords)}" if keywords else "no retrieval hits"
-        )
+        keyword_note = f"grounded in {', '.join(keywords)}" if keywords else "no retrieval hits"
         prompt_preview = prompt.strip().replace("\n", " ")[:120]
         return (
             f"[sim] Answer to '{prompt_preview}': "
@@ -161,19 +159,20 @@ class BatchedSimulatedLLMBackend:
             self._queue.append((done, result_box))
             if self._first_arrival_at is None:
                 self._first_arrival_at = time.monotonic()
-            should_dispatch = (
-                len(self._queue) >= self._batch_max_size
-                and not self._executor_active
-            )
+            should_dispatch = len(self._queue) >= self._batch_max_size and not self._executor_active
             if should_dispatch:
                 self._executor_active = True
                 threading.Thread(
-                    target=self._flush_now, args=(approx_tokens,), daemon=True,
+                    target=self._flush_now,
+                    args=(approx_tokens,),
+                    daemon=True,
                 ).start()
             elif not self._executor_active:
                 self._executor_active = True
                 threading.Thread(
-                    target=self._flush_after_window, args=(approx_tokens,), daemon=True,
+                    target=self._flush_after_window,
+                    args=(approx_tokens,),
+                    daemon=True,
                 ).start()
 
         # Block until the executor thread fills our result.
@@ -189,7 +188,7 @@ class BatchedSimulatedLLMBackend:
     def _flush_now(self, approx_tokens: int) -> None:
         with self._lock:
             batch = self._queue[: self._batch_max_size]
-            self._queue = self._queue[self._batch_max_size:]
+            self._queue = self._queue[self._batch_max_size :]
             self._first_arrival_at = None if not self._queue else self._first_arrival_at
             self._executor_active = False
             # If the residual queue is non-empty, kick another executor.
@@ -220,14 +219,14 @@ class BatchedSimulatedLLMBackend:
                 if not self._executor_active:
                     self._executor_active = True
                     threading.Thread(
-                        target=self._flush_now, args=(approx_tokens,), daemon=True,
+                        target=self._flush_now,
+                        args=(approx_tokens,),
+                        daemon=True,
                     ).start()
 
     def _render_answer(self, prompt: str, context: str, approx_tokens: int) -> str:
         keywords = _extract_keywords(context, limit=3)
-        keyword_note = (
-            f"grounded in {', '.join(keywords)}" if keywords else "no retrieval hits"
-        )
+        keyword_note = f"grounded in {', '.join(keywords)}" if keywords else "no retrieval hits"
         prompt_preview = prompt.strip().replace("\n", " ")[:120]
         return (
             f"[batched-sim] Answer to '{prompt_preview}' "
@@ -271,9 +270,7 @@ class HuggingFaceLLMBackend:
         elif device == "cpu":
             resolved_device = -1
         else:
-            raise LLMInferenceError(
-                f"Unknown device {device!r}; use 'auto', 'cuda', or 'cpu'."
-            )
+            raise LLMInferenceError(f"Unknown device {device!r}; use 'auto', 'cuda', or 'cpu'.")
 
         self._model_name = model_name
         self._max_new_tokens = max_new_tokens
@@ -294,7 +291,8 @@ class HuggingFaceLLMBackend:
 
     def generate(self, prompt: str, context: str) -> str:
         composed = (
-            f"Context:\n{context}\n\nQuestion: {prompt}\nAnswer:" if context
+            f"Context:\n{context}\n\nQuestion: {prompt}\nAnswer:"
+            if context
             else f"Question: {prompt}\nAnswer:"
         )
         outputs = self._pipeline(
@@ -331,7 +329,11 @@ class LLMInferenceEngine:
 def _default_backend_from_env() -> LLMBackend:
     backend_name = os.environ.get("LLM_BACKEND", "sim").strip().lower()
     serialise = os.environ.get("LLM_SERIALISE", "false").strip().lower() in (
-        "1", "true", "yes", "y", "on"
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
     )
     if backend_name in ("", "sim", "simulated", "fake"):
         return SimulatedLLMBackend(serialise=serialise)
@@ -342,18 +344,42 @@ def _default_backend_from_env() -> LLMBackend:
     if backend_name in ("batched", "batched_sim", "batched-sim"):
         return BatchedSimulatedLLMBackend(serialise=serialise)
     raise LLMInferenceError(
-        f"Unknown LLM_BACKEND '{backend_name}'. "
-        "Use 'sim', 'batched_sim', or 'hf'."
+        f"Unknown LLM_BACKEND '{backend_name}'. " "Use 'sim', 'batched_sim', or 'hf'."
     )
 
 
 _KEYWORD_PATTERN = re.compile(r"[A-Za-z][A-Za-z\-]{3,}")
 _STOPWORDS = frozenset(
     {
-        "the", "that", "this", "with", "from", "have", "been", "they",
-        "their", "there", "which", "when", "what", "into", "across",
-        "because", "while", "other", "such", "some", "also", "still",
-        "than", "these", "those", "each", "about", "after", "before",
+        "the",
+        "that",
+        "this",
+        "with",
+        "from",
+        "have",
+        "been",
+        "they",
+        "their",
+        "there",
+        "which",
+        "when",
+        "what",
+        "into",
+        "across",
+        "because",
+        "while",
+        "other",
+        "such",
+        "some",
+        "also",
+        "still",
+        "than",
+        "these",
+        "those",
+        "each",
+        "about",
+        "after",
+        "before",
     }
 )
 

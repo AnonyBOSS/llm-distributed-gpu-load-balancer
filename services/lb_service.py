@@ -19,6 +19,7 @@ Endpoints:
     GET  /metrics         — same as /health for now
     POST /request         — proxy to a master using configured strategy
 """
+
 from __future__ import annotations
 
 import os
@@ -67,9 +68,7 @@ def _parse_master_urls() -> list[tuple[str, str]]:
     if MASTER_IDS_RAW:
         ids = [i.strip() for i in MASTER_IDS_RAW.split(",") if i.strip()]
         if len(ids) != len(urls):
-            raise RuntimeError(
-                f"MASTER_IDS has {len(ids)} entries but MASTER_URLS has {len(urls)}"
-            )
+            raise RuntimeError(f"MASTER_IDS has {len(ids)} entries but MASTER_URLS has {len(urls)}")
     else:
         ids = [f"master-{i + 1}" for i in range(len(urls))]
 
@@ -81,9 +80,7 @@ def _resolve_strategy(name: str) -> LoadBalancingStrategy:
         return LoadBalancingStrategy(name)
     except ValueError as exc:
         valid = [s.value for s in LoadBalancingStrategy]
-        raise RuntimeError(
-            f"LB_STRATEGY={name!r} invalid. Valid: {valid}"
-        ) from exc
+        raise RuntimeError(f"LB_STRATEGY={name!r} invalid. Valid: {valid}") from exc
 
 
 app = FastAPI(title="lb")

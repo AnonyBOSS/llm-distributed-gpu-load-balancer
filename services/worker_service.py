@@ -19,6 +19,7 @@ Endpoints:
     POST /admin/fail      — mark FAILED (for failure-simulation tests)
     POST /admin/recover   — mark HEALTHY
 """
+
 from __future__ import annotations
 
 import asyncio

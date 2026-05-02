@@ -116,7 +116,8 @@ class LoadBalancer:
             workers,
             key=lambda w: (
                 w.pending_tasks / w.max_concurrent_tasks
-                if w.max_concurrent_tasks > 0 else float("inf")
+                if w.max_concurrent_tasks > 0
+                else float("inf")
             ),
         )
 

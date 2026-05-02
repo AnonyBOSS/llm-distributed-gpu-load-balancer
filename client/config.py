@@ -3,27 +3,28 @@
 All client-side configuration lives here.
 Teammates or the grader can change load parameters without touching logic files.
 """
+
 from __future__ import annotations
 
 # ── Load test volumes ─────────────────────────────────────────────────────────
-DEFAULT_NUM_USERS: int         = 1000
-RAMP_UP_STEPS: list[int]       = [100, 250, 500, 750, 1000]   # gradual ramp levels
-RAMP_STEP_PAUSE_SEC: float     = 2.0    # wait between ramp steps
+DEFAULT_NUM_USERS: int = 1000
+RAMP_UP_STEPS: list[int] = [100, 250, 500, 750, 1000]  # gradual ramp levels
+RAMP_STEP_PAUSE_SEC: float = 2.0  # wait between ramp steps
 
 # ── Concurrency ───────────────────────────────────────────────────────────────
-MAX_THREAD_WORKERS: int        = 500    # ThreadPoolExecutor cap (OS thread limit)
+MAX_THREAD_WORKERS: int = 500  # ThreadPoolExecutor cap (OS thread limit)
 
 # ── Per-request behaviour ─────────────────────────────────────────────────────
-REQUEST_TIMEOUT_SEC: float     = 30.0   # seconds before a request is marked timeout
-MAX_RETRIES: int               = 2      # retries on transient failures
-RETRY_BACKOFF_SEC: float       = 0.3   # base backoff (doubles each attempt)
+REQUEST_TIMEOUT_SEC: float = 30.0  # seconds before a request is marked timeout
+MAX_RETRIES: int = 2  # retries on transient failures
+RETRY_BACKOFF_SEC: float = 0.3  # base backoff (doubles each attempt)
 
 # ── Live reporting ────────────────────────────────────────────────────────────
-REPORT_INTERVAL_SEC: float     = 5.0   # how often the progress bar updates
+REPORT_INTERVAL_SEC: float = 5.0  # how often the progress bar updates
 
 # ── Results output ────────────────────────────────────────────────────────────
-SAVE_RESULTS: bool             = True
-RESULTS_FILE: str              = "client/results/load_test_results.json"
+SAVE_RESULTS: bool = True
+RESULTS_FILE: str = "client/results/load_test_results.json"
 
 # ── Sample prompts (realistic LLM queries) ────────────────────────────────────
 SAMPLE_PROMPTS: list[str] = [
