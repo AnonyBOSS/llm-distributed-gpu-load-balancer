@@ -83,6 +83,12 @@ services:
       LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
       LLM_DEVICE: cpu
       MAX_CONCURRENT_TASKS: "2"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
 
   master:
     environment:
