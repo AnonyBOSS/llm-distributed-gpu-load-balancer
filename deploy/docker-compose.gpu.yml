@@ -75,32 +75,14 @@ services:
       retries: 60
       start_period: 300s
 
-  # Worker-3 promoted to real GPU inference (all-real LLM cluster).
-  # With bfloat16, three model copies fit comfortably in 6 GB VRAM.
+  # Worker-3 runs real Qwen on CPU — independent compute from the GPU workers.
+  # Slower (~30-60s per request) but produces genuine LLM answers.
   worker-3:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.gpu
-    image: cse354-llm-svc-gpu:latest
     environment:
       LLM_BACKEND: hf
       LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
-      LLM_DEVICE: auto
-      MAX_CONCURRENT_TASKS: "4"
-      THREADPOOL_TOKENS: "100"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
-      interval: 10s
-      timeout: 10s
-      retries: 60
-      start_period: 300s
+      LLM_DEVICE: cpu
+      MAX_CONCURRENT_TASKS: "2"
 
   master:
     environment:
