@@ -1,17 +1,15 @@
-# Compose override that runs TWO workers on a CUDA GPU and ONE on CPU
-# (simulated backend). Tuned for ~6 GB consumer GPUs (RTX 3060 / 4060).
+# Compose override that runs TWO workers on a CUDA GPU and TWO on CPU.
+# All four workers run the real Qwen/Qwen2.5-0.5B-Instruct model.
+# Tuned for ~6 GB consumer GPUs (RTX 3060 / 4060).
 #
-# VRAM math on a 6 GB card:
-#   Qwen-0.5B fp32 ~ 1.0-1.5 GB weights + activations + KV-cache room ~ 2.0 GB / worker.
-#   Two GPU workers ~ 4 GB, leaves ~ 2 GB free for KV-cache under load.
-#   Three GPU workers exceeds 6 GB once KV-cache fills under concurrent
-#   inference and OOMs the GPU + thrashes the host CPU (we learned this
-#   the hard way on the first run, see commit bc37a36).
+# VRAM math on a 6 GB card (bfloat16):
+#   Qwen-0.5B bf16 ~ 0.5 GB weights per worker.
+#   Two GPU workers ~ 1.0 GB, leaves ~ 3.7 GB free for KV-cache.
+#   CPU workers run independently and use system RAM, not VRAM.
 #
-# The third worker stays on the CPU image with the simulated backend.
-# Combined with the two GPU workers, the master sees a heterogeneous mix
-# and the LB tier exercises load_aware / power_of_two selection across
-# different real backends.
+# The heterogeneous mix (GPU + CPU) lets load_aware demonstrate
+# intelligent routing: fast GPU workers handle the bulk of traffic
+# while CPU workers provide overflow capacity.
 #
 # Apply on top of the base file:
 #   docker compose -f deploy/docker-compose.yml \
@@ -36,6 +34,8 @@ services:
       LLM_DEVICE: auto
       MAX_CONCURRENT_TASKS: "4"
       THREADPOOL_TOKENS: "100"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
     deploy:
       resources:
         reservations:
@@ -61,6 +61,8 @@ services:
       LLM_DEVICE: auto
       MAX_CONCURRENT_TASKS: "4"
       THREADPOOL_TOKENS: "100"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
     deploy:
       resources:
         reservations:
@@ -75,14 +77,31 @@ services:
       retries: 60
       start_period: 300s
 
-  # Worker-3 runs real Qwen on CPU — independent compute from the GPU workers.
-  # Slower (~30-60s per request) but produces genuine LLM answers.
+  # Workers 3 & 4 run real Qwen on CPU — independent compute from GPU workers.
+  # Slower (~30-60s per request) but produce genuine LLM answers.
   worker-3:
     environment:
       LLM_BACKEND: hf
       LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
       LLM_DEVICE: cpu
-      MAX_CONCURRENT_TASKS: "2"
+      MAX_CONCURRENT_TASKS: "4"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
+
+  worker-4:
+    environment:
+      LLM_BACKEND: hf
+      LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
+      LLM_DEVICE: cpu
+      MAX_CONCURRENT_TASKS: "4"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
       interval: 10s
@@ -97,3 +116,6 @@ services:
       # and FAISS-indexes the 16-doc corpus on first call. Adds ~30 s warmup
       # to the first request, ~10-50 ms per call thereafter.
       RAG_USE_STUB: "false"
+
+volumes:
+  hf-cache:

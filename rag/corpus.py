@@ -171,4 +171,135 @@ DEFAULT_CORPUS: tuple[Document, ...] = (
             "Failed workers reject new work until an operator restores them."
         ),
     ),
+    Document(
+        doc_id="doc-017",
+        title="Transformer architecture",
+        text=(
+            "The transformer architecture uses self-attention to process input "
+            "sequences in parallel rather than sequentially. It consists of an "
+            "encoder and decoder, each built from layers of multi-head attention "
+            "and feed-forward networks. Transformers are the foundation of modern "
+            "LLMs like GPT, LLaMA, and Qwen."
+        ),
+    ),
+    Document(
+        doc_id="doc-018",
+        title="Attention mechanisms in neural networks",
+        text=(
+            "Attention allows a model to focus on relevant parts of the input when "
+            "producing each output token. Scaled dot-product attention computes "
+            "compatibility scores between queries and keys, then uses them to weight "
+            "values. Multi-head attention runs several attention functions in parallel "
+            "to capture different types of relationships."
+        ),
+    ),
+    Document(
+        doc_id="doc-019",
+        title="Tokenization and vocabulary",
+        text=(
+            "Tokenization splits raw text into subword units that a language model "
+            "can process. Byte-pair encoding (BPE) and SentencePiece are common "
+            "algorithms. A larger vocabulary reduces sequence length but increases "
+            "embedding table size. The tokenizer must match the one used during "
+            "model training."
+        ),
+    ),
+    Document(
+        doc_id="doc-020",
+        title="Model quantization for inference",
+        text=(
+            "Quantization reduces model weights from 32-bit floats to lower "
+            "precision formats like float16, bfloat16, or int4. This cuts memory "
+            "usage and speeds up inference with minimal accuracy loss. Bfloat16 "
+            "preserves the dynamic range of float32 and is natively supported on "
+            "NVIDIA Ampere and newer GPU architectures."
+        ),
+    ),
+    Document(
+        doc_id="doc-021",
+        title="API rate limiting and throttling",
+        text=(
+            "Rate limiting restricts how many requests a client can make in a "
+            "given time window to protect backend services from overload. Common "
+            "algorithms include token bucket, sliding window, and fixed window "
+            "counters. Rate limiting is essential for public-facing LLM APIs to "
+            "prevent abuse and ensure fair access."
+        ),
+    ),
+    Document(
+        doc_id="doc-022",
+        title="Microservices architecture",
+        text=(
+            "Microservices decompose an application into small, independently "
+            "deployable services that communicate over HTTP or message queues. "
+            "Each service owns its data and can be scaled, updated, or restarted "
+            "without affecting others. This pattern suits distributed AI systems "
+            "where inference, retrieval, and routing are separate concerns."
+        ),
+    ),
+    Document(
+        doc_id="doc-023",
+        title="Containerization with Docker",
+        text=(
+            "Docker packages applications and their dependencies into containers "
+            "that run consistently across environments. Docker Compose orchestrates "
+            "multi-container deployments, linking services like workers, load "
+            "balancers, and databases. GPU containers require the NVIDIA Container "
+            "Toolkit for CUDA access."
+        ),
+    ),
+    Document(
+        doc_id="doc-024",
+        title="CUDA programming and GPU memory",
+        text=(
+            "CUDA is NVIDIA's parallel computing platform for running code on GPU "
+            "hardware. GPU memory (VRAM) is limited and shared across all running "
+            "processes. Model weights, KV-cache for active requests, and activation "
+            "tensors all compete for VRAM. Out-of-memory errors crash the process "
+            "and require careful capacity planning."
+        ),
+    ),
+    Document(
+        doc_id="doc-025",
+        title="Neural network training and fine-tuning",
+        text=(
+            "Training a neural network adjusts its weights by computing gradients "
+            "of a loss function via backpropagation. Fine-tuning adapts a pre-trained "
+            "model to a specific task using a smaller, domain-specific dataset. "
+            "Techniques like LoRA reduce the number of trainable parameters, making "
+            "fine-tuning feasible on consumer GPUs."
+        ),
+    ),
+    Document(
+        doc_id="doc-026",
+        title="Data pipelines and ETL",
+        text=(
+            "Data pipelines automate the extraction, transformation, and loading "
+            "of data from source systems into analytics or ML platforms. Reliable "
+            "pipelines use idempotent operations, schema validation, and dead-letter "
+            "queues to handle failures gracefully without data loss."
+        ),
+    ),
+    Document(
+        doc_id="doc-027",
+        title="Caching strategies for web services",
+        text=(
+            "Caching stores frequently accessed data closer to the consumer to "
+            "reduce latency and backend load. Strategies include write-through, "
+            "write-behind, and cache-aside patterns. For LLM services, caching "
+            "embeddings or repeated query results can significantly reduce GPU "
+            "compute costs."
+        ),
+    ),
+    Document(
+        doc_id="doc-028",
+        title="Observability and distributed tracing",
+        text=(
+            "Observability combines metrics, logs, and traces to understand system "
+            "behaviour. Prometheus collects time-series metrics, Grafana visualises "
+            "dashboards, and distributed tracing tools like Jaeger track requests "
+            "across service boundaries. Good observability is critical for debugging "
+            "performance issues in multi-node GPU clusters."
+        ),
+    ),
 )

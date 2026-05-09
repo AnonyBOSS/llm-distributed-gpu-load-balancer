@@ -1,2 +1,2 @@
 strategy,users,fault,elapsed_sec,throughput_rps,successful,errors,error_rate,p50_ms,p95_ms,p99_ms,worker_dist
-load_aware,100,False,233.985,0.26,61,39,0.39,78322.1,233731.8,234004.8,"{""gpu-worker-1"": 21, ""gpu-worker-2"": 20, ""gpu-worker-3"": 20}"
+load_aware,100,False,232.277,0.43,100,0,0.0,145093.9,230093.6,232215.0,"{""gpu-worker-1"": 24, ""gpu-worker-2"": 25, ""gpu-worker-3"": 27, ""gpu-worker-4"": 24}"

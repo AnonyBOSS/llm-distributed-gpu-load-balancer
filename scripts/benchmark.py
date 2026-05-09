@@ -123,11 +123,12 @@ def _fire_one(client: httpx.Client, i: int) -> RequestResult:
     # any benchmark whose offered load exceeds total slot capacity reports
     # massive errors even though the server is healthy.
     #
-    # Budget: 11 attempts with exponential backoff starting at 0.2 s
-    # gives ~ 0.2+0.4+0.8+1.6+3.2+6.4+12.8+25.6+51.2 = 102 s total before
-    # giving up -- enough to drain a GPU-bound queue with real Qwen inference.
-    max_attempts = 11
-    backoff = 0.2
+    # Budget: 30 attempts with exponential backoff starting at 0.5 s,
+    # capped at 10 s per wait. Gives ~300 s total before giving up --
+    # enough to drain a mixed GPU+CPU queue with real Qwen inference.
+    max_attempts = 30
+    backoff = 0.5
+    max_wait = 10.0  # cap so we never sleep longer than 10 s
     last_status = 0
     last_worker = "?"
     for attempt in range(max_attempts):
@@ -148,13 +149,14 @@ def _fire_one(client: httpx.Client, i: int) -> RequestResult:
                     timestamp=time.time(),
                 )
             if r.status_code in (502, 503) and attempt + 1 < max_attempts:
-                # capacity-related; retry with exponential backoff + jitter
-                time.sleep(backoff * (2**attempt) + 0.001 * (i % 10))
+                # capacity-related; retry with capped exponential backoff + jitter
+                wait = min(backoff * (2**attempt), max_wait) + 0.001 * (i % 10)
+                time.sleep(wait)
                 continue
             break
         except httpx.HTTPError:
             if attempt + 1 < max_attempts:
-                time.sleep(backoff * (2**attempt))
+                time.sleep(min(backoff * (2**attempt), max_wait))
                 continue
             break
     return RequestResult(
