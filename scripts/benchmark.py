@@ -480,7 +480,7 @@ def _check_stack() -> None:
 def _gpu_preflight(user_counts: list[int]) -> None:
     """In --mode gpu, warn / abort if VRAM headroom is dangerously low.
 
-    A model copy on GPU costs ~2 GB for distilgpt2 (fp32 weights + activations
+    A model copy on GPU costs ~2 GB for Qwen/Qwen2.5-0.5B-Instruct (fp32 weights + activations
     + KV-cache room). The compose default is 2 GPU workers ~ 4 GB used, ~2 GB
     free on a 6 GB card. If less than ~1 GB is free *now*, the next
     benchmark run is likely to OOM the GPU mid-flight, which on the first

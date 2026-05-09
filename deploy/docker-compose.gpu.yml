@@ -2,7 +2,7 @@
 # (simulated backend). Tuned for ~6 GB consumer GPUs (RTX 3060 / 4060).
 #
 # VRAM math on a 6 GB card:
-#   distilgpt2 fp32 ~ 150 MB weights + activations + KV-cache room ~ 2.0 GB / worker.
+#   Qwen-0.5B fp32 ~ 1.0-1.5 GB weights + activations + KV-cache room ~ 2.0 GB / worker.
 #   Two GPU workers ~ 4 GB, leaves ~ 2 GB free for KV-cache under load.
 #   Three GPU workers exceeds 6 GB once KV-cache fills under concurrent
 #   inference and OOMs the GPU + thrashes the host CPU (we learned this
@@ -32,9 +32,9 @@ services:
     image: cse354-llm-svc-gpu:latest
     environment:
       LLM_BACKEND: hf
-      LLM_MODEL: distilgpt2
+      LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
       LLM_DEVICE: auto
-      MAX_CONCURRENT_TASKS: "2"
+      MAX_CONCURRENT_TASKS: "4"
       THREADPOOL_TOKENS: "100"
     deploy:
       resources:
@@ -57,9 +57,9 @@ services:
     image: cse354-llm-svc-gpu:latest
     environment:
       LLM_BACKEND: hf
-      LLM_MODEL: distilgpt2
+      LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
       LLM_DEVICE: auto
-      MAX_CONCURRENT_TASKS: "2"
+      MAX_CONCURRENT_TASKS: "4"
       THREADPOOL_TOKENS: "100"
     deploy:
       resources:
@@ -75,13 +75,32 @@ services:
       retries: 60
       start_period: 300s
 
-  # Worker-3 stays on the CPU base image with the simulated backend.
-  # Demonstrates a heterogeneous worker pool (real GPU inference + sim)
-  # behind one master + LB.
+  # Worker-3 promoted to real GPU inference (all-real LLM cluster).
+  # With bfloat16, three model copies fit comfortably in 6 GB VRAM.
   worker-3:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.gpu
+    image: cse354-llm-svc-gpu:latest
     environment:
-      LLM_BACKEND: sim
-      MAX_CONCURRENT_TASKS: "8"
+      LLM_BACKEND: hf
+      LLM_MODEL: Qwen/Qwen2.5-0.5B-Instruct
+      LLM_DEVICE: auto
+      MAX_CONCURRENT_TASKS: "4"
+      THREADPOOL_TOKENS: "100"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
 
   master:
     environment:

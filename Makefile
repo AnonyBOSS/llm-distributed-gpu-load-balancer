@@ -38,19 +38,19 @@ bench-quick:          ## Tiny benchmark: load_aware at 50 + 200 users, no fault
 bench-batching:       ## Sim vs continuous batching head-to-head at 500 users
 	python scripts/benchmark.py --no-fault --strategies load_aware --user-counts 500 --compare-backends
 
-bench-gpu:            ## GPU-mode benchmark @ 50 / 250 / 1000 users (distilgpt2 on CUDA)
+bench-gpu:            ## GPU-mode benchmark @ 50 / 250 / 1000 users (Qwen on CUDA)
 	python scripts/benchmark.py --mode gpu --strategies round_robin --user-counts 50,250,1000
 
 bench-hetero:         ## Heterogeneous-worker benchmark across all 4 strategies
 	python scripts/heterogeneous_bench.py
 
-gpu-up:               ## Build + start the GPU stack (workers on CUDA, distilgpt2)
+gpu-up:               ## Build + start the GPU stack (workers on CUDA, Qwen)
 	$(COMPOSE_GPU) up -d --build
 
 gpu-down:             ## Stop the GPU stack
 	$(COMPOSE_GPU) down
 
-gpu-smoke:            ## Send one real distilgpt2 inference and print the answer
+gpu-smoke:            ## Send one real Qwen inference and print the answer
 	python scripts/gpu_smoke.py
 
 hetero-up:            ## Restart workers with heterogeneous capacity (1:2:8)

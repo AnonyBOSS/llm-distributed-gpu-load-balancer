@@ -57,7 +57,7 @@ Horizontal scale today is one-axis: add more `worker-N` containers and add their
 
 ## What about real GPUs?
 
-The system uses a `SimulatedLLMBackend` by default for fast iteration. Setting `LLM_BACKEND=hf` per worker container loads `distilgpt2` via the HuggingFace `transformers` pipeline.
+The system uses a `SimulatedLLMBackend` by default for fast iteration. Setting `LLM_BACKEND=hf` per worker container loads `Qwen/Qwen2.5-0.5B-Instruct` via the HuggingFace `transformers` pipeline.
 
 **CPU mode (default):** the base [deploy/Dockerfile](../deploy/Dockerfile) installs CPU-only torch from PyTorch's CPU index (`https://download.pytorch.org/whl/cpu`). `make up` brings up the CPU stack. Both `sim` and `hf` backends run on CPU.
 

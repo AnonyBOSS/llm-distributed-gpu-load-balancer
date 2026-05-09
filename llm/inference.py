@@ -245,7 +245,7 @@ class HuggingFaceLLMBackend:
 
     def __init__(
         self,
-        model_name: str = "distilgpt2",
+        model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
         max_new_tokens: int = 64,
         device: str = "auto",
     ) -> None:
@@ -279,10 +279,12 @@ class HuggingFaceLLMBackend:
             f"[llm] Loading HuggingFace model '{model_name}' "
             f"on {self._device} (cuda_available={torch.cuda.is_available()})"
         )
+        dtype = torch.bfloat16 if resolved_device == 0 else torch.float32
         self._pipeline = pipeline(
             "text-generation",
             model=model_name,
             device=resolved_device,
+            torch_dtype=dtype,
         )
 
     @property
@@ -290,20 +292,34 @@ class HuggingFaceLLMBackend:
         return self._device
 
     def generate(self, prompt: str, context: str) -> str:
-        composed = (
-            f"Context:\n{context}\n\nQuestion: {prompt}\nAnswer:"
-            if context
-            else f"Question: {prompt}\nAnswer:"
-        )
-        outputs = self._pipeline(
-            composed,
-            max_new_tokens=self._max_new_tokens,
-            do_sample=False,
-            return_full_text=False,
-        )
-        if not outputs:
-            raise LLMInferenceError("HuggingFace pipeline returned no output")
-        return outputs[0]["generated_text"].strip()
+        if "instruct" in self._model_name.lower() or "chat" in self._model_name.lower():
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question."},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}" if context else prompt}
+            ]
+            outputs = self._pipeline(
+                messages,
+                max_new_tokens=self._max_new_tokens,
+                do_sample=True,
+                temperature=0.7,
+                repetition_penalty=1.2,
+            )
+            return outputs[0]["generated_text"][-1]["content"].strip()
+        else:
+            composed = (
+                f"Context:\n{context}\n\nQuestion: {prompt}\nAnswer:"
+                if context
+                else f"Question: {prompt}\nAnswer:"
+            )
+            outputs = self._pipeline(
+                composed,
+                max_new_tokens=self._max_new_tokens,
+                do_sample=True,
+                temperature=0.7,
+                repetition_penalty=1.2,
+                return_full_text=False,
+            )
+            return outputs[0]["generated_text"].strip()
 
 
 class LLMInferenceEngine:
@@ -338,7 +354,7 @@ def _default_backend_from_env() -> LLMBackend:
     if backend_name in ("", "sim", "simulated", "fake"):
         return SimulatedLLMBackend(serialise=serialise)
     if backend_name in ("hf", "huggingface", "transformers"):
-        model_name = os.environ.get("LLM_MODEL", "distilgpt2")
+        model_name = os.environ.get("LLM_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
         device = os.environ.get("LLM_DEVICE", "auto").strip().lower()
         return HuggingFaceLLMBackend(model_name=model_name, device=device)
     if backend_name in ("batched", "batched_sim", "batched-sim"):

@@ -9,7 +9,7 @@ Configure via env vars:
     FAILURE_RATE              (default: 0.0)
     THREADPOOL_TOKENS         (default: 1000)  -- anyio threadpool size
     LLM_BACKEND               (sim | hf, default: sim)
-    LLM_MODEL                 (default: distilgpt2 when LLM_BACKEND=hf)
+    LLM_MODEL                 (default: Qwen/Qwen2.5-0.5B-Instruct when LLM_BACKEND=hf)
 
 Endpoints:
     GET  /                — liveness ("ok")
@@ -207,7 +207,7 @@ def admin_backend(payload: dict) -> dict[str, str]:
     elif name in ("batched", "batched_sim", "batched-sim"):
         engine = LLMInferenceEngine(backend=BatchedSimulatedLLMBackend())
     elif name in ("hf", "huggingface", "transformers"):
-        model_name = str(payload.get("model", "distilgpt2"))
+        model_name = str(payload.get("model", "Qwen/Qwen2.5-0.5B-Instruct"))
         device = str(payload.get("device", "auto"))
         engine = LLMInferenceEngine(
             backend=HuggingFaceLLMBackend(model_name=model_name, device=device)

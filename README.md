@@ -65,7 +65,7 @@ make gpu-down
 
 The default GPU compose ([deploy/docker-compose.gpu.yml](deploy/docker-compose.gpu.yml)) is tuned for ~6 GB consumer GPUs (RTX 3060 / 4060) and runs **2 GPU workers + 1 CPU/sim worker**. The math:
 
-| Setup | Per-worker VRAM (distilgpt2 fp32) | Total | Free on 6 GB | Outcome |
+| Setup | Per-worker VRAM (Qwen 0.5B fp32) | Total | Free on 6 GB | Outcome |
 |---|---:|---:|---:|---|
 | 1 GPU worker | ~2 GB | 2 GB | ~4 GB | Plenty of headroom; loses redundancy |
 | **2 GPU workers (default)** | ~2 GB | ~4 GB | ~2 GB | Comfortable for 50–100 user benchmarks |
@@ -188,7 +188,7 @@ Internals:
 `LLMInferenceEngine` delegates to a backend that conforms to the `LLMBackend` protocol.
 
 - `SimulatedLLMBackend` (default) sleeps for a duration that depends on the prompt and context length, plus uniform jitter, and returns a templated answer that mentions a few keywords from the retrieved context. It accepts an optional `failure_rate` so the LLM step can also fail under stress.
-- `HuggingFaceLLMBackend` runs `transformers.pipeline("text-generation", model=...)` and is selected by setting `LLM_BACKEND=hf`. Model name is configurable via `LLM_MODEL` (default `distilgpt2`).
+- `HuggingFaceLLMBackend` runs `transformers.pipeline("text-generation", model=...)` and is selected by setting `LLM_BACKEND=hf`. Model name is configurable via `LLM_MODEL` (default `Qwen/Qwen2.5-0.5B-Instruct`).
 - The backend is resolved from the `LLM_BACKEND` environment variable inside `LLMInferenceEngine.__init__`, so existing call sites that do `LLMInferenceEngine()` keep working without code changes.
 
 ## Request Lifecycle
@@ -339,7 +339,7 @@ pip install transformers torch
 LLM_BACKEND=hf python main.py
 ```
 
-This routes the LLM step through `transformers.pipeline("text-generation", model="distilgpt2")` instead of the simulated backend. Note that this path is for demos with a handful of requests, not the 1000+ load test; the simulated backend is the realistic choice on a laptop.
+This routes the LLM step through `transformers.pipeline("text-generation", model="Qwen/Qwen2.5-0.5B-Instruct")` instead of the simulated backend. Note that this path is for demos with a handful of requests, not the 1000+ load test; the simulated backend is the realistic choice on a laptop.
 
 ### Optional: Real RAG Retriever in `main.py`
 
