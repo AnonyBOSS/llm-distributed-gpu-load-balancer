@@ -32,7 +32,7 @@ Eight processes, each its own container. Communication is JSON over HTTP.
 4. The chosen master receives the request, runs RAG retrieval against its in-memory FAISS index (or stub), then asks its inner `LoadBalancer` (default `load_aware`) which **worker** to send it to.
 5. `LoadBalancer.select_worker()` is lock-protected and atomically reserves the chosen worker's `pending_tasks` counter — the fix for the original thundering-herd bug.
 6. The master forwards the request to the worker over HTTP via a `RemoteWorkerProxy`. The proxy duck-types as a `GPUWorkerNode`, so the existing `MasterScheduler` retry loop works without modification.
-7. The worker runs `LLMInferenceEngine.generate(...)` (sim or HuggingFace backend) and returns the answer.
+7. The worker runs `LLMInferenceEngine.generate(...)` (sim or HuggingFace backend). If the client passed `max_new_tokens` in the request `metadata`, it overrides the backend default.
 8. The master assembles the `Response` and returns it back up the chain.
 
 ## Failure recovery
@@ -57,7 +57,7 @@ Horizontal scale today is one-axis: add more `worker-N` containers and add their
 
 ## What about real GPUs?
 
-The system uses a `SimulatedLLMBackend` by default for fast iteration. Setting `LLM_BACKEND=hf` per worker container loads `distilgpt2` via the HuggingFace `transformers` pipeline.
+The system uses a `SimulatedLLMBackend` by default for fast iteration. Setting `LLM_BACKEND=hf` per worker container loads `Qwen/Qwen2.5-0.5B-Instruct` via the HuggingFace `transformers` pipeline.
 
 **CPU mode (default):** the base [deploy/Dockerfile](../deploy/Dockerfile) installs CPU-only torch from PyTorch's CPU index (`https://download.pytorch.org/whl/cpu`). `make up` brings up the CPU stack. Both `sim` and `hf` backends run on CPU.
 

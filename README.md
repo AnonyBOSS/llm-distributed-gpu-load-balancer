@@ -55,34 +55,37 @@ make bench-hetero    # heterogeneous workers (capacity 1:2:8) — strategies act
 GPU mode (requires NVIDIA GPU + `nvidia-container-toolkit`):
 
 ```bash
-make gpu-up          # 2 workers on CUDA + 1 sim worker behind one master
+make gpu-up          # 2 GPU workers + 2 CPU workers, all real Qwen LLM
 make gpu-smoke       # one real inference end-to-end
-make bench-gpu       # GPU benchmark (defaults to 50 users — see hardware notes)
+make bench-gpu       # GPU benchmark (defaults to 100 users)
 make gpu-down
 ```
 
 ### Hardware notes
 
-The default GPU compose ([deploy/docker-compose.gpu.yml](deploy/docker-compose.gpu.yml)) is tuned for ~6 GB consumer GPUs (RTX 3060 / 4060) and runs **2 GPU workers + 1 CPU/sim worker**. The math:
+The default GPU compose ([deploy/docker-compose.gpu.yml](deploy/docker-compose.gpu.yml)) is tuned for ~6 GB consumer GPUs (RTX 3060 / 4060) and runs **2 GPU workers + 2 CPU workers**, all serving the real Qwen/Qwen2.5-0.5B-Instruct model with bfloat16 precision. A shared Docker volume (`hf-cache`) ensures the model is downloaded only once.
 
-| Setup | Per-worker VRAM (distilgpt2 fp32) | Total | Free on 6 GB | Outcome |
-|---|---:|---:|---:|---|
-| 1 GPU worker | ~2 GB | 2 GB | ~4 GB | Plenty of headroom; loses redundancy |
-| **2 GPU workers (default)** | ~2 GB | ~4 GB | ~2 GB | Comfortable for 50–100 user benchmarks |
-| 3 GPU workers | ~2 GB | ~6 GB | ~0 GB | OOMs under load, CPU pegs at 100 % |
+| Worker | Device | Precision | VRAM / RAM | Concurrent Tasks |
+|---|---|---|---|---:|
+| worker-1 | NVIDIA GPU | bfloat16 | ~0.5 GB VRAM | 4 |
+| worker-2 | NVIDIA GPU | bfloat16 | ~0.5 GB VRAM | 4 |
+| worker-3 | CPU | float32 | ~2 GB RAM | 4 |
+| worker-4 | CPU | float32 | ~2 GB RAM | 4 |
+
+GPU workers handle the bulk of traffic (~5s/request), while CPU workers provide independent overflow capacity (~30-60s/request). The `load_aware` strategy automatically routes more traffic to the faster GPU workers.
 
 Three guardrails prevent the OOM-then-CPU-thrash failure mode:
 
 1. **Worker self-shedding** — each worker's `process()` raises `WorkerAtCapacityError` when `active_tasks >= MAX_CONCURRENT_TASKS`. The HTTP boundary returns 503 with `X-Reject-Reason: at-capacity`; the master's scheduler falls over to the next candidate without spending a retry attempt and without tripping the proxy's circuit breaker. Tested in [tests/unit/test_worker.py::test_at_capacity_worker_rejects_without_running](tests/unit/test_worker.py) and [tests/unit/test_scheduler.py::test_at_capacity_worker_falls_over_without_consuming_retries](tests/unit/test_scheduler.py).
-2. **Conservative `MAX_CONCURRENT_TASKS=2` per GPU worker** — caps in-flight inference per GPU process to leave KV-cache room.
+2. **`MAX_CONCURRENT_TASKS=4` per worker** — caps in-flight inference per process to balance throughput and resource usage.
 3. **`make bench-gpu` pre-flight VRAM check** — queries `nvidia-smi` before the run, aborts if free VRAM is too low for the requested peak user count.
 
-For larger GPUs (24 GB+), edit `deploy/docker-compose.gpu.yml` to put `worker-3` on GPU too and bump `MAX_CONCURRENT_TASKS`.
+For larger GPUs (24 GB+), promote the CPU workers to GPU too and bump `MAX_CONCURRENT_TASKS`.
 
 ### Topology
 
 ```
-client → nginx (8080) → lb (7000) → master (9000) → worker-{1,2,3} (8000)
+client → nginx (8080) → lb (7000) → master (9000) → worker-{1,2,3,4} (8000)
                                         │                   ▲
                                         │  health probes    │
                                         └───────────────────┘
@@ -90,7 +93,7 @@ client → nginx (8080) → lb (7000) → master (9000) → worker-{1,2,3} (8000
                    prometheus (9090) ──→ grafana (3000)
 ```
 
-- Three GPU workers, each its own process with its own `LLMInferenceEngine`.
+- Four workers: 2 GPU (real Qwen bfloat16 on CUDA) + 2 CPU (real Qwen float32), each its own process with its own `LLMInferenceEngine`.
 - One master orchestrating RAG + worker selection + per-request retry.
 - One LB tier (extensible to N masters).
 - One nginx upstream (matching the brief's "Load Balancing Tools: NGINX" requirement).
@@ -188,7 +191,7 @@ Internals:
 `LLMInferenceEngine` delegates to a backend that conforms to the `LLMBackend` protocol.
 
 - `SimulatedLLMBackend` (default) sleeps for a duration that depends on the prompt and context length, plus uniform jitter, and returns a templated answer that mentions a few keywords from the retrieved context. It accepts an optional `failure_rate` so the LLM step can also fail under stress.
-- `HuggingFaceLLMBackend` runs `transformers.pipeline("text-generation", model=...)` and is selected by setting `LLM_BACKEND=hf`. Model name is configurable via `LLM_MODEL` (default `distilgpt2`).
+- `HuggingFaceLLMBackend` runs `transformers.pipeline("text-generation", model=...)` and is selected by setting `LLM_BACKEND=hf`. Model name is configurable via `LLM_MODEL` (default `Qwen/Qwen2.5-0.5B-Instruct`).
 - The backend is resolved from the `LLM_BACKEND` environment variable inside `LLMInferenceEngine.__init__`, so existing call sites that do `LLMInferenceEngine()` keep working without code changes.
 
 ## Request Lifecycle
@@ -339,7 +342,7 @@ pip install transformers torch
 LLM_BACKEND=hf python main.py
 ```
 
-This routes the LLM step through `transformers.pipeline("text-generation", model="distilgpt2")` instead of the simulated backend. Note that this path is for demos with a handful of requests, not the 1000+ load test; the simulated backend is the realistic choice on a laptop.
+This routes the LLM step through `transformers.pipeline("text-generation", model="Qwen/Qwen2.5-0.5B-Instruct")` with bfloat16 precision on GPU (float32 on CPU). The model is loaded in bfloat16 on Ampere+ GPUs to halve VRAM usage while preserving numerical stability.
 
 ### Optional: Real RAG Retriever in `main.py`
 

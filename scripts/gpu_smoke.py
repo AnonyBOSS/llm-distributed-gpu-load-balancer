@@ -12,7 +12,7 @@ run:
 
 It hits each worker's /health (so you can see the device the model loaded
 on), then POSTs one real inference through the LB and prints the answer +
-latency. If you've never run distilgpt2 on this host, the very first
+latency. If you've never run Qwen/Qwen2.5-0.5B-Instruct on this host, the very first
 request includes a one-time model download — expect 10-30 s.
 """
 
