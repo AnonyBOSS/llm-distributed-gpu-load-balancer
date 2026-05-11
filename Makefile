@@ -9,7 +9,7 @@ COMPOSE_HETERO := docker compose -f deploy/docker-compose.yml -f deploy/docker-c
 help:                 ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-20s %s\n", $$1, $$2}'
 
-up:                   ## Build + start the CPU compose stack (8 containers)
+up:                   ## Build + start the CPU compose stack (9 containers)
 	$(COMPOSE) up -d --build
 
 down:                 ## Stop and remove the CPU compose stack

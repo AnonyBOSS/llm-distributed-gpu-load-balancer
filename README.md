@@ -18,7 +18,7 @@ The project models a distributed AI serving platform that accepts many simultane
 The repository runs as a real distributed system: each component is its own
 FastAPI process in its own Docker container, with active health monitoring,
 Prometheus + Grafana observability, a pytest CI suite, and a benchmark
-harness that drives the full 100→1000 user ramp across all three LB
+harness that drives the full 100→1000 user ramp across all four LB
 strategies plus a fault-injection scenario. An interactive web dashboard provides real-time chat, live worker monitoring, benchmark execution, and fault injection.
 
 ![Dashboard UI showing Chat and Worker Status](docs/assets/ui_dashboard.png)
@@ -29,7 +29,7 @@ is preserved for fast local iteration and is what the unit tests target.
 ### Quickstart (distributed mode)
 
 ```bash
-make up                                       # CPU stack (8 containers)
+make up                                       # CPU stack (9 containers)
 curl -X POST http://localhost:8080/request \
      -H 'Content-Type: application/json' \
      -d '{"request_id":"r1","user_id":"u1","prompt":"hello","metadata":{}}'
@@ -109,7 +109,7 @@ failure-recovery model, and concurrency story.
 
 - shared `Request`/`Response` data models in `common`
 - Pydantic wire models in [common/wire.py](common/wire.py) for HTTP serialisation
-- a configurable `LoadBalancer` in `lb` with three strategies: round-robin, least-connections, and load-aware, with a lock + reservation counter that fixes a real thundering-herd bug discovered during smoke testing
+- a configurable `LoadBalancer` in `lb` with four strategies: round-robin, least-connections, load-aware, and power-of-two, with a lock + reservation counter that fixes a real thundering-herd bug discovered during smoke testing
 - a `MasterScheduler` in `master` that drives the RAG step, dispatches work to workers, and retries on failure
 - an active `HealthMonitor` in [master/health_monitor.py](master/health_monitor.py) that polls every worker every 1 s and auto-flips them FAILED/HEALTHY with a 3-strike circuit breaker
 - thread-safe `GPUWorkerNode` instances in `workers` with capacity, health states, latency tracking, completion counters, and injectable failures
@@ -118,7 +118,7 @@ failure-recovery model, and concurrency story.
 - a real `RAGRetriever` in `rag` backed by `sentence-transformers` and FAISS, with a fast deterministic stub
 - FastAPI services in [services/](services/) for worker, master, and LB tiers, each exposing `/health` and Prometheus `/metrics`
 - Prometheus + Grafana stack pre-provisioned in [deploy/](deploy/) with a dashboard for throughput, p50/p95/p99 latency, per-worker utilisation, and live worker status
-- 36 unit tests + 4 integration tests in [tests/](tests/) covering the herd regression, scheduler retry/fallover, monitor circuit breaker, RAG, and the live compose stack
+- 48 unit tests + 4 integration tests in [tests/](tests/) covering the herd regression, scheduler retry/fallover, monitor circuit breaker, RAG, and the live compose stack
 - GitHub Actions CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) running unit tests on push and integration tests on PRs
 - benchmark harness in [scripts/benchmark.py](scripts/benchmark.py) running 100→1000 ramps × 3 strategies × clean/fault, saving CSV + chart PNGs
 
@@ -138,7 +138,7 @@ The architecture follows the CSE354 brief.
 
 ### 2. Load Balancer (`lb/`)
 
-`LoadBalancer` accepts a list of workers and a `LoadBalancingStrategy`. Three strategies are supported:
+`LoadBalancer` accepts a list of workers and a `LoadBalancingStrategy`. Four strategies are supported:
 
 | Strategy            | Selection rule                                                                                                 | Cite |
 |---------------------|----------------------------------------------------------------------------------------------------------------|------|
@@ -375,7 +375,7 @@ Useful experiments to run against the current implementation:
 
 | Experiment                              | Command                                                                                                     |
 |-----------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| Strategy comparison under uniform load  | `python scripts/smoke_concurrent.py --users 200 --strategy {round_robin,least_connections,load_aware}`      |
+| Strategy comparison under uniform load  | `python scripts/smoke_concurrent.py --users 200 --strategy {round_robin,least_connections,load_aware,power_of_two}`      |
 | Fault tolerance                         | `python scripts/smoke_concurrent.py --users 200 --fault-after 50`                                           |
 | Resilience to flakiness                 | `python scripts/smoke_concurrent.py --users 200 --failure-rate 0.1`                                         |
 | Real retrieval correctness              | `python scripts/smoke_concurrent.py --users 20 --real-rag`                                                  |

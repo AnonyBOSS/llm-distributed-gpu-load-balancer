@@ -543,7 +543,7 @@ def main() -> None:
     parser.add_argument(
         "--strategies",
         type=lambda s: s.split(","),
-        default=["round_robin", "least_connections", "load_aware"],
+        default=["round_robin", "least_connections", "load_aware", "power_of_two"],
         help="comma-separated LB strategies",
     )
     parser.add_argument(
@@ -601,7 +601,7 @@ def main() -> None:
         # default to a single strategy unless overridden, so each invocation
         # finishes in a reasonable time.
         args.no_fault = True
-        if args.strategies == ["round_robin", "least_connections", "load_aware"]:
+        if args.strategies == ["round_robin", "least_connections", "load_aware", "power_of_two"]:
             # User accepted the default; collapse to just round_robin in GPU mode
             # so we don't run 4x more than they expected.
             args.strategies = ["round_robin"]
