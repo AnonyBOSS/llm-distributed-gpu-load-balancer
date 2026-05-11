@@ -32,6 +32,10 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
 .msg.bot{align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg .message-line{display:flex;align-items:flex-start;gap:8px}
+.msg .message-text{min-width:0;flex:1}
+.msg-icon{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;flex:0 0 1em;margin-top:.18em;color:inherit}
+.msg-icon svg{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .msg .meta{font-size:.7rem;color:var(--text3);margin-top:6px;display:flex;gap:12px}
 .msg.bot .meta{color:var(--text3)}
 .msg.user .meta{color:rgba(255,255,255,.6)}
@@ -93,6 +97,8 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 .bench-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:3px;transition:width .3s;width:0%}
 .bench-stats{font-size:.7rem;color:var(--text2);display:flex;justify-content:space-between;margin-top:4px}
 .bench-result{font-size:.75rem;color:var(--text);margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;line-height:1.5}
+.bench-summary{display:flex;align-items:flex-start;gap:8px}
+.bench-summary-text{min-width:0;flex:1}
 
 /* Links */
 .links{display:flex;flex-direction:column;gap:6px}
@@ -242,20 +248,29 @@ async function sendMessage() {
     document.getElementById('statAvgLatency').textContent = (totalLatency / msgCount).toFixed(1) + 's';
   } catch (e) {
     typing.remove();
-    addMessage('⚠️ Error: ' + e.message, 'bot', 'error');
+    addMessage('Error: ' + e.message, 'bot', 'error', '', iconSvg('warning'));
   }
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('chatInput').focus();
 }
 
-function addMessage(text, type, meta = '', extraHtml = '') {
+function addMessage(text, type, meta = '', extraHtml = '', prefixHtml = '') {
   const div = document.createElement('div');
   div.className = 'msg ' + type;
   const body = type === 'bot' ? renderBotText(text) : escapeHtml(text);
-  div.innerHTML = `<div>${body}</div>${extraHtml}${meta ? `<div class="meta"><span>${escapeHtml(meta)}</span></div>` : ''}`;
+  div.innerHTML = `<div class="message-line">${prefixHtml}<span class="message-text">${body}</span></div>${extraHtml}${meta ? `<div class="meta"><span>${escapeHtml(meta)}</span></div>` : ''}`;
   document.getElementById('chatMessages').appendChild(div);
   div.scrollIntoView({ behavior: 'smooth' });
   return div;
+}
+
+function iconSvg(kind) {
+  const icons = {
+    success: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16 9"></path></svg>',
+    warning: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 4.7h3.4L22 17.8V19.5A2.5 2.5 0 0 1 19.5 22H4.5A2.5 2.5 0 0 1 2 19.5v-1.7L10.3 4.7z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>',
+    chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16"></path><rect x="6" y="12" width="3" height="7" rx="1"></rect><rect x="10.5" y="8" width="3" height="11" rx="1"></rect><rect x="15" y="5" width="3" height="14" rx="1"></rect></svg>'
+  };
+  return `<span class="msg-icon msg-icon-${kind}" aria-hidden="true">${icons[kind] || icons.warning}</span>`;
 }
 
 function escapeHtml(text) {
@@ -296,10 +311,10 @@ async function switchStrategy(strategy) {
     });
     if (res.ok) {
       document.getElementById('statStrategy').textContent = strategy.replace(/_/g, ' ');
-      addMessage(`✅ LB strategy switched to <strong>${strategy}</strong>`, 'bot', 'System');
+      addMessage(`LB strategy switched to **${strategy}**`, 'bot', 'System', '', iconSvg('success'));
     }
   } catch (e) {
-    addMessage('⚠️ Failed to switch strategy: ' + e.message, 'bot', 'error');
+    addMessage('Failed to switch strategy: ' + e.message, 'bot', 'error', '', iconSvg('warning'));
   }
 }
 
@@ -376,11 +391,11 @@ async function runBenchmark(n) {
   const distStr = Object.entries(dist).map(([k, v]) => `${k.replace('gpu-','')}: ${v}`).join(', ');
 
   result.style.display = 'block';
-  result.innerHTML = `<strong>${errors === 0 ? '✅' : '⚠️'} ${ok}/${n} ok, ${errors} errors</strong><br>Time: ${elapsed}s • Throughput: ${rps} rps<br>Distribution: ${distStr}`;
+  result.innerHTML = `<div class="bench-summary">${iconSvg(errors === 0 ? 'success' : 'warning')}<div class="bench-summary-text"><strong>${ok}/${n} ok, ${errors} errors</strong><br>Time: ${elapsed}s • Throughput: ${rps} rps<br>Distribution: ${distStr}</div></div>`;
   btn.classList.remove('running');
   btn.classList.add(errors === 0 ? 'success' : 'error');
   btn.querySelector('.label').textContent = `Done: ${ok}/${n} — Run Again?`;
-  addMessage(`📊 <strong>Benchmark complete:</strong> ${ok}/${n} ok, ${errors} errors in ${elapsed}s (${rps} rps)<br>Distribution: ${distStr}`, 'bot', 'System');
+  addMessage(`**Benchmark complete:** ${ok}/${n} ok, ${errors} errors in ${elapsed}s (${rps} rps)\nDistribution: ${distStr}`, 'bot', 'System', '', iconSvg('chart'));
   benchRunning = false;
   setTimeout(() => { btn.classList.remove('success', 'error'); btn.querySelector('.label').textContent = 'Run 100 Users Load Test'; }, 10000);
 }
