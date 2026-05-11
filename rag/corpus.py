@@ -574,4 +574,105 @@ DEFAULT_CORPUS: tuple[Document, ...] = (
             "'llm/' implements HuggingFace and simulated inference backends. 'rag/' manages FAISS."
         ),
     ),
+    Document(
+        doc_id="doc-056",
+        title="Docker and Compose Infrastructure",
+        text=(
+            "The cluster runs entirely in Docker. A base Dockerfile provides CPU support, "
+            "while Dockerfile.gpu uses the nvidia/cuda runtime for GPU acceleration. "
+            "The docker-compose.yml files define the containers: Nginx, Load Balancer, "
+            "Master, multiple Workers, Prometheus, and Grafana. A shared 'hf-cache' "
+            "volume prevents downloading the HuggingFace model multiple times."
+        ),
+    ),
+    Document(
+        doc_id="doc-057",
+        title="Nginx Reverse Proxy Configuration",
+        text=(
+            "Nginx acts as the single entrypoint on port 8080. It serves the static UI "
+            "dashboard at the root path, and proxies API requests like '/request', "
+            "'/workers', and '/admin' directly to the Load Balancer service. It uses "
+            "the 'least_conn' directive to distribute traffic if multiple LBs exist."
+        ),
+    ),
+    Document(
+        doc_id="doc-058",
+        title="Dashboard UI and Chat Client",
+        text=(
+            "The web dashboard (index.html) is a zero-terminal interface that visualizes "
+            "cluster health and provides a chat window. When a user sends a chat message, "
+            "the UI injects 'max_new_tokens: 512' into the request metadata to override "
+            "the backend's default short limit, enabling long-form generation."
+        ),
+    ),
+    Document(
+        doc_id="doc-059",
+        title="Observability: Prometheus and Grafana",
+        text=(
+            "Every FastAPI service exposes a '/metrics' endpoint. Prometheus scrapes "
+            "these endpoints every 5 seconds to collect data on active tasks, pending "
+            "tasks, and worker status. Grafana connects to Prometheus and displays "
+            "this data on the 'cse354-overview' dashboard on port 3000."
+        ),
+    ),
+    Document(
+        doc_id="doc-060",
+        title="Load Testing and Benchmark Scripts",
+        text=(
+            "The system includes 'scripts/benchmark.py', a locust-like testing harness "
+            "that simulates high concurrency (e.g., 100 simultaneous users). It fires "
+            "massive batches of requests through the LB to measure how well the routing "
+            "strategies handle overwhelming traffic and to validate fault tolerance."
+        ),
+    ),
+    Document(
+        doc_id="doc-061",
+        title="The Language Model: Qwen2.5-0.5B-Instruct",
+        text=(
+            "By default, the real GPU workers load 'Qwen/Qwen2.5-0.5B-Instruct' via "
+            "the HuggingFace transformers pipeline. It is a highly capable 500-million "
+            "parameter model that fits comfortably in consumer GPU VRAM (like an RTX 3060), "
+            "leaving ample memory for the KV-cache during concurrent inference."
+        ),
+    ),
+    Document(
+        doc_id="doc-062",
+        title="Worker Self-Shedding at Capacity",
+        text=(
+            "When a GPU worker's active tasks reach its 'max_concurrent_tasks' limit, "
+            "it refuses new requests with a 503 status code and an 'at-capacity' header. "
+            "This 'self-shedding' prevents the GPU queue from exploding and stalling "
+            "the PCIe bus, forcing the Master to gracefully route the request elsewhere."
+        ),
+    ),
+    Document(
+        doc_id="doc-063",
+        title="FastAPI Concurrency Model",
+        text=(
+            "The project uses synchronous FastAPI endpoints backed by an AnyIO threadpool "
+            "expanded to 1000 tokens. This easily handles 1000 concurrent users without "
+            "the complexity of 'async def'. The health monitor is the only pure asyncio "
+            "background task, sharing the event loop with the web server."
+        ),
+    ),
+    Document(
+        doc_id="doc-064",
+        title="RemoteWorkerProxy and Duck-Typing",
+        text=(
+            "Inside the Master Service, workers are represented by the 'RemoteWorkerProxy' "
+            "class. It duck-types the local 'GPUWorkerNode' interface, holding an httpx "
+            "client connection pool. This allows the MasterScheduler to orchestrate remote "
+            "HTTP workers exactly as if they were local Python objects."
+        ),
+    ),
+    Document(
+        doc_id="doc-065",
+        title="Heterogeneous Cluster Support",
+        text=(
+            "The cluster can run a mix of fast GPU nodes and slow CPU nodes simultaneously. "
+            "In this heterogeneous mode, simple load balancers like 'round_robin' fail "
+            "because they overload the slow CPU workers. The 'load_aware' strategy "
+            "solves this by dividing queue depth by node capacity, steering most traffic to the GPUs."
+        ),
+    ),
 )
