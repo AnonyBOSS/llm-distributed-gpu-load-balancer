@@ -407,12 +407,17 @@ async function runBenchmark(n) {
     done++;
     bar.style.width = ((done / n) * 100) + '%';
     count.textContent = `${done} / ${n}`;
-    updateWorkers();
   };
 
-  const tasks = [];
-  for (let i = 0; i < n; i++) tasks.push(sendOne(i));
-  await Promise.all(tasks);
+  // Run with bounded concurrency (4) so we don't saturate the browser's 6-connection limit per host.
+  // This leaves 2 TCP sockets free for /workers polling and Kill/Recover buttons!
+  let currentIdx = 0;
+  const workerPool = Array(4).fill(0).map(async () => {
+    while (currentIdx < n && benchRunning) {
+      await sendOne(currentIdx++);
+    }
+  });
+  await Promise.all(workerPool);
 
   clearInterval(timerInt);
   clearInterval(activePoll);
