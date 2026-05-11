@@ -154,6 +154,8 @@ services:
       dockerfile: deploy/Dockerfile
     image: cse354-llm-svc:latest
     command: uvicorn services.lb_service:app --host 0.0.0.0 --port 7000
+    ports:
+      - "7000:7000"
     environment:
       MASTER_URLS: "http://master:9000"
       LB_STRATEGY: round_robin
