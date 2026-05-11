@@ -212,6 +212,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
         </div>
         <button class="btn" onclick="switchStrategy('round_robin')"><span class="icon"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span><div><div class="label">Round Robin</div><div class="desc">Switch LB strategy</div></div></button>
         <button class="btn" onclick="switchStrategy('least_connections')"><span class="icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><div><div class="label">Least Connections</div><div class="desc">Switch LB strategy</div></div></button>
+        <button class="btn" onclick="switchStrategy('power_of_two')"><span class="icon"><svg viewBox="0 0 24 24"><path d="M16 4h4v4"/><path d="M4 20L20 4"/><path d="M4 14l6-6"/><path d="M14 4l-4 4"/></svg></span><div><div class="label">Power of Two</div><div class="desc">Switch LB strategy</div></div></button>
         <button class="btn" onclick="switchStrategy('load_aware')"><span class="icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><div><div class="label">Load Aware</div><div class="desc">Switch LB strategy (recommended)</div></div></button>
       </div>
     </div>
