@@ -127,7 +127,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
     </div>
     <div class="chat-messages" id="chatMessages">
       <div class="msg bot">
-        <div>Hi! I'm Qwen, running on a distributed GPU cluster. Ask me anything — my responses are grounded in a 28-document RAG knowledge base covering distributed systems, ML/AI, Docker, CUDA, and more.</div>
+        <div>Hi! I'm <strong>Qwen</strong>, running on a distributed GPU cluster. Ask me anything — my responses are grounded in a <strong>growing RAG knowledge base</strong> covering distributed systems, ML/AI, Docker, CUDA, and more.</div>
         <div class="meta"><span>System</span></div>
       </div>
     </div>
@@ -236,8 +236,8 @@ async function sendMessage() {
     totalLatency += parseFloat(latency);
     typing.remove();
 
-    const context = data.context ? `<div class="rag-context">RAG Context: ${data.context.split('---')[0].trim().substring(0, 150)}...</div>` : '';
-    addMessage(data.answer + context, 'bot', `${data.worker_id} • ${latency}s`);
+    const context = data.context ? `<div class="rag-context">RAG Context: ${escapeHtml(data.context.split('---')[0].trim().substring(0, 150))}...</div>` : '';
+    addMessage(data.answer, 'bot', `${data.worker_id} • ${latency}s`, context);
     document.getElementById('statMessages').textContent = msgCount;
     document.getElementById('statAvgLatency').textContent = (totalLatency / msgCount).toFixed(1) + 's';
   } catch (e) {
@@ -248,13 +248,28 @@ async function sendMessage() {
   document.getElementById('chatInput').focus();
 }
 
-function addMessage(text, type, meta = '') {
+function addMessage(text, type, meta = '', extraHtml = '') {
   const div = document.createElement('div');
   div.className = 'msg ' + type;
-  div.innerHTML = `<div>${text}</div>${meta ? `<div class="meta"><span>${meta}</span></div>` : ''}`;
+  const body = type === 'bot' ? renderBotText(text) : escapeHtml(text);
+  div.innerHTML = `<div>${body}</div>${extraHtml}${meta ? `<div class="meta"><span>${escapeHtml(meta)}</span></div>` : ''}`;
   document.getElementById('chatMessages').appendChild(div);
   div.scrollIntoView({ behavior: 'smooth' });
   return div;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function renderBotText(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
 }
 
 function addTyping() {
