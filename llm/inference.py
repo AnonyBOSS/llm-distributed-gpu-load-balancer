@@ -295,8 +295,14 @@ class HuggingFaceLLMBackend:
         tokens_limit = max_new_tokens if max_new_tokens is not None else self._max_new_tokens
         if "instruct" in self._model_name.lower() or "chat" in self._model_name.lower():
             messages = [
-                {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question."},
-                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}" if context else prompt}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. Use the provided context to answer the question.",
+                },
+                {
+                    "role": "user",
+                    "content": f"Context:\n{context}\n\nQuestion: {prompt}" if context else prompt,
+                },
             ]
             outputs = self._pipeline(
                 messages,
