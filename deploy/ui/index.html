@@ -198,6 +198,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
       <h3><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Quick Actions</h3>
       <div class="actions">
         <button class="btn" id="benchBtn" onclick="runBenchmark(100)"><span class="icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span><div><div class="label">Run 100 Users Load Test</div><div class="desc">Fire 100 concurrent requests through the cluster</div></div></button>
+        <button class="btn" id="benchBtn1k" onclick="runBenchmark(1000)"><span class="icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg></span><div><div class="label">Run 1000 Users Load Test</div><div class="desc">Stress test: 1000 concurrent requests</div></div></button>
         <div class="bench-progress" id="benchProgress">
           <div style="font-size:.75rem;font-weight:600" id="benchTitle">Running benchmark...</div>
           <div class="bench-bar"><div class="bench-bar-fill" id="benchBarFill"></div></div>
@@ -323,17 +324,21 @@ let benchRunning = false;
 async function runBenchmark(n) {
   if (benchRunning) return;
   benchRunning = true;
-  const btn = document.getElementById('benchBtn');
+  const btn = n >= 1000 ? document.getElementById('benchBtn1k') : document.getElementById('benchBtn');
+  const otherBtn = n >= 1000 ? document.getElementById('benchBtn') : document.getElementById('benchBtn1k');
   const prog = document.getElementById('benchProgress');
   const bar = document.getElementById('benchBarFill');
   const count = document.getElementById('benchCount');
   const timer = document.getElementById('benchTime');
   const result = document.getElementById('benchResult');
   btn.classList.add('running');
-  btn.querySelector('.label').textContent = 'Benchmark Running...';
+  btn.querySelector('.label').textContent = `Benchmark Running (${n})...`;
+  otherBtn.style.pointerEvents = 'none';
+  otherBtn.style.opacity = '0.4';
   prog.classList.add('active');
   result.style.display = 'none';
   bar.style.width = '0%';
+  document.getElementById('benchTitle').textContent = `Running ${n}-user benchmark...`;
 
   const prompts = [
     'What is load balancing?','Explain distributed systems','What is Docker?',
@@ -395,9 +400,12 @@ async function runBenchmark(n) {
   btn.classList.remove('running');
   btn.classList.add(errors === 0 ? 'success' : 'error');
   btn.querySelector('.label').textContent = `Done: ${ok}/${n} — Run Again?`;
+  otherBtn.style.pointerEvents = '';
+  otherBtn.style.opacity = '';
   addMessage(`**Benchmark complete:** ${ok}/${n} ok, ${errors} errors in ${elapsed}s (${rps} rps)\nDistribution: ${distStr}`, 'bot', 'System', '', iconSvg('chart'));
   benchRunning = false;
-  setTimeout(() => { btn.classList.remove('success', 'error'); btn.querySelector('.label').textContent = 'Run 100 Users Load Test'; }, 10000);
+  const origLabel = n >= 1000 ? 'Run 1000 Users Load Test' : 'Run 100 Users Load Test';
+  setTimeout(() => { btn.classList.remove('success', 'error'); btn.querySelector('.label').textContent = origLabel; }, 10000);
 }
 
 // Worker status polling

@@ -179,7 +179,7 @@ Internals:
 
 ### 5. RAG Module (`rag/`)
 
-`RAGRetriever` builds an in-process vector index over `rag/corpus.py` (16 short documents about distributed LLM serving, load balancing, fault tolerance, and concurrency).
+`RAGRetriever` builds an in-process vector index over `rag/corpus.py` (65 documents covering distributed systems, ML/AI, Docker, CUDA, project architecture, and more).
 
 - Embeddings come from `sentence-transformers/all-MiniLM-L6-v2` (configurable).
 - The index is a `faiss.IndexFlatIP` with normalised vectors, equivalent to cosine similarity.
@@ -233,7 +233,7 @@ MasterScheduler.handle_request(request, worker)
 |-- llm/
 |   `-- inference.py            # LLMInferenceEngine + simulated and HF backends
 |-- rag/
-|   |-- corpus.py               # in-memory document collection (16 docs)
+|   |-- corpus.py               # in-memory document collection (65 docs)
 |   `-- retriever.py            # FAISS-backed retriever with stub fast path
 |-- scripts/
 |   `-- smoke_concurrent.py     # 50-thread concurrent smoke test
