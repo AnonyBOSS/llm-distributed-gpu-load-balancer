@@ -52,7 +52,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 .sidebar{overflow-y:auto;background:var(--surface);display:flex;flex-direction:column;gap:0}
 .section{padding:16px 20px;border-bottom:1px solid var(--border)}
 .section h3{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.section h3 .icon{font-size:1rem}
+.section h3 svg,.btn svg,.link-item svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
 /* Worker Cards */
 .workers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -78,7 +78,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 .actions{display:flex;flex-direction:column;gap:8px}
 .btn{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;font-size:.8rem;cursor:pointer;transition:all .2s;text-align:left;width:100%}
 .btn:hover{border-color:var(--accent);background:rgba(99,102,241,.08);transform:translateX(2px)}
-.btn .icon{font-size:1.1rem;width:24px;text-align:center}
+.btn .icon{width:24px;display:flex;align-items:center;justify-content:center}
 .btn .label{font-weight:500}
 .btn .desc{font-size:.65rem;color:var(--text3)}
 .btn.running{border-color:var(--yellow);animation:borderPulse 2s infinite}
@@ -98,7 +98,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 .links{display:flex;flex-direction:column;gap:6px}
 .link-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;transition:background .2s;font-size:.8rem}
 .link-item:hover{background:rgba(99,102,241,.08)}
-.link-item .icon{font-size:1rem;width:24px;text-align:center}
+.link-item .icon{width:24px;display:flex;align-items:center;justify-content:center}
 .link-item .url{font-size:.65rem;color:var(--text3)}
 
 /* Topology */
@@ -141,7 +141,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
   <div class="sidebar">
     <!-- Worker Status -->
     <div class="section">
-      <h3><span class="icon">■</span> Worker Status</h3>
+      <h3><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Worker Status</h3>
       <div class="workers" id="workerGrid">
         <div class="worker-card healthy" id="w1"><div class="name">worker-1</div><div class="device">GPU (CUDA)</div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
         <div class="worker-card healthy" id="w2"><div class="name">worker-2</div><div class="device">GPU (CUDA)</div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
@@ -152,7 +152,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 
     <!-- Live Stats -->
     <div class="section">
-      <h3><span class="icon">■</span> Session Stats</h3>
+      <h3><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Session Stats</h3>
       <div class="stats">
         <div class="stat"><div class="value" id="statMessages">0</div><div class="label">Messages</div></div>
         <div class="stat"><div class="value" id="statAvgLatency">—</div><div class="label">Avg Latency</div></div>
@@ -163,7 +163,7 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 
     <!-- Topology -->
     <div class="section">
-      <h3><span class="icon">■</span> Cluster Topology</h3>
+      <h3><svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Cluster Topology</h3>
       <div class="topology">
         <span class="highlight">client</span> → nginx:8080 → lb:7000<br>
         → <span class="highlight">master:9000</span> (RAG + routing)<br>
@@ -176,31 +176,31 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 
     <!-- Quick Links -->
     <div class="section">
-      <h3><span class="icon">■</span> Quick Links</h3>
+      <h3><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Quick Links</h3>
       <div class="links">
-        <a href="http://localhost:3000/d/cse354-overview" target="_blank" class="link-item"><span class="icon">→</span><div><div>Grafana Dashboard</div><div class="url">localhost:3000</div></div></a>
-        <a href="http://localhost:9090/targets" target="_blank" class="link-item"><span class="icon">→</span><div><div>Prometheus Targets</div><div class="url">localhost:9090</div></div></a>
-        <a href="http://localhost:9000/docs" target="_blank" class="link-item"><span class="icon">→</span><div><div>Master API Docs</div><div class="url">localhost:9000/docs</div></div></a>
-        <a href="http://localhost:7000/docs" target="_blank" class="link-item"><span class="icon">→</span><div><div>Load Balancer API Docs</div><div class="url">localhost:7000/docs</div></div></a>
-        <a href="http://localhost:9000/workers" target="_blank" class="link-item"><span class="icon">→</span><div><div>Worker Registry</div><div class="url">localhost:9000/workers</div></div></a>
-        <a href="http://localhost:9000/metrics" target="_blank" class="link-item"><span class="icon">→</span><div><div>Raw Prometheus Metrics</div><div class="url">localhost:9000/metrics</div></div></a>
+        <a href="http://localhost:3000/d/cse354-overview" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><div><div>Grafana Dashboard</div><div class="url">localhost:3000</div></div></a>
+        <a href="http://localhost:9090/targets" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><div><div>Prometheus Targets</div><div class="url">localhost:9090</div></div></a>
+        <a href="http://localhost:9000/docs" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><div><div>Master API Docs</div><div class="url">localhost:9000/docs</div></div></a>
+        <a href="http://localhost:7000/docs" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span><div><div>Load Balancer API Docs</div><div class="url">localhost:7000/docs</div></div></a>
+        <a href="http://localhost:9000/workers" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><div>Worker Registry</div><div class="url">localhost:9000/workers</div></div></a>
+        <a href="http://localhost:9000/metrics" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span><div><div>Raw Prometheus Metrics</div><div class="url">localhost:9000/metrics</div></div></a>
       </div>
     </div>
 
     <!-- Actions -->
     <div class="section">
-      <h3><span class="icon">■</span> Quick Actions</h3>
+      <h3><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Quick Actions</h3>
       <div class="actions">
-        <button class="btn" id="benchBtn" onclick="runBenchmark(100)"><span class="icon">▶</span><div><div class="label">Run 100 Users Load Test</div><div class="desc">Fire 100 concurrent requests through the cluster</div></div></button>
+        <button class="btn" id="benchBtn" onclick="runBenchmark(100)"><span class="icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span><div><div class="label">Run 100 Users Load Test</div><div class="desc">Fire 100 concurrent requests through the cluster</div></div></button>
         <div class="bench-progress" id="benchProgress">
           <div style="font-size:.75rem;font-weight:600" id="benchTitle">Running benchmark...</div>
           <div class="bench-bar"><div class="bench-bar-fill" id="benchBarFill"></div></div>
           <div class="bench-stats"><span id="benchCount">0 / 100</span><span id="benchTime">0s</span></div>
           <div class="bench-result" id="benchResult" style="display:none"></div>
         </div>
-        <button class="btn" onclick="switchStrategy('round_robin')"><span class="icon">→</span><div><div class="label">Round Robin</div><div class="desc">Switch LB strategy</div></div></button>
-        <button class="btn" onclick="switchStrategy('least_connections')"><span class="icon">→</span><div><div class="label">Least Connections</div><div class="desc">Switch LB strategy</div></div></button>
-        <button class="btn" onclick="switchStrategy('load_aware')"><span class="icon">→</span><div><div class="label">Load Aware</div><div class="desc">Switch LB strategy (recommended)</div></div></button>
+        <button class="btn" onclick="switchStrategy('round_robin')"><span class="icon"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span><div><div class="label">Round Robin</div><div class="desc">Switch LB strategy</div></div></button>
+        <button class="btn" onclick="switchStrategy('least_connections')"><span class="icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><div><div class="label">Least Connections</div><div class="desc">Switch LB strategy</div></div></button>
+        <button class="btn" onclick="switchStrategy('load_aware')"><span class="icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><div><div class="label">Load Aware</div><div class="desc">Switch LB strategy (recommended)</div></div></button>
       </div>
     </div>
   </div>
