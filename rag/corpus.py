@@ -524,4 +524,54 @@ DEFAULT_CORPUS: tuple[Document, ...] = (
             "matrices into each layer, drastically reducing memory and compute costs."
         ),
     ),
+    Document(
+        doc_id="doc-051",
+        title="Project Overview: Distributed LLM Load Balancer",
+        text=(
+            "The current system is a 'Distributed LLM GPU Load Balancer'. It is a "
+            "Python-based, containerized cluster designed to serve Large Language Models "
+            "(like Qwen2.5-0.5B-Instruct) across multiple worker nodes. It demonstrates "
+            "advanced load balancing strategies, RAG integration, and fault tolerance."
+        ),
+    ),
+    Document(
+        doc_id="doc-052",
+        title="System Architecture and Request Flow",
+        text=(
+            "The cluster topology flows as follows: A client sends an HTTP request to Nginx "
+            "(port 8080), which reverse-proxies to the Load Balancer Service (port 7000). "
+            "The LB forwards to a Master Service (port 9000). The Master runs RAG, selects "
+            "a worker via an inner LoadBalancer, and sends the request to a Worker Node (port 8000)."
+        ),
+    ),
+    Document(
+        doc_id="doc-053",
+        title="Load Balancing Strategies",
+        text=(
+            "The system supports four load balancing strategies: 'round_robin' (strict rotation), "
+            "'least_connections' (picks lowest active tasks), 'load_aware' (factors in active "
+            "tasks, GPU utilization, and capacity limits), and 'power_of_two' (randomly samples "
+            "two nodes and picks the less loaded one to reduce overhead in large clusters)."
+        ),
+    ),
+    Document(
+        doc_id="doc-054",
+        title="Fault Tolerance and Circuit Breaker",
+        text=(
+            "The Master node uses an active health monitor that polls workers every second. "
+            "If a worker misses 3 consecutive heartbeats (the '3-strike' rule), it is marked "
+            "as FAILED and removed from routing. Additionally, if a request fails mid-flight, "
+            "the MasterScheduler automatically retries it on a healthy worker."
+        ),
+    ),
+    Document(
+        doc_id="doc-055",
+        title="Project File Structure",
+        text=(
+            "The codebase is divided into clear domains: 'deploy/' holds Dockerfiles and Nginx configs. "
+            "'services/' holds FastAPI endpoints. 'master/' contains the scheduler and health monitor. "
+            "'workers/' contains the GPU node proxy logic. 'lb/' implements routing strategies. "
+            "'llm/' implements HuggingFace and simulated inference backends. 'rag/' manages FAISS."
+        ),
+    ),
 )
