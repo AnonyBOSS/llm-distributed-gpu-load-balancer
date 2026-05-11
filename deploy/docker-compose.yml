@@ -175,6 +175,7 @@ services:
       - "8080:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ui/index.html:/usr/share/nginx/html/index.html:ro
     depends_on:
       lb:
         condition: service_healthy
