@@ -229,7 +229,7 @@ async function sendMessage() {
     const res = await fetch(API + '/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_id: reqId, user_id: 'dashboard-user', prompt, metadata: {} })
+      body: JSON.stringify({ request_id: reqId, user_id: 'dashboard-user', prompt, metadata: { max_new_tokens: 512 } })
     });
     const data = await res.json();
     const latency = ((performance.now() - start) / 1000).toFixed(1);

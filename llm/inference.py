@@ -15,7 +15,7 @@ class LLMInferenceError(RuntimeError):
 
 
 class LLMBackend(Protocol):
-    def generate(self, prompt: str, context: str) -> str: ...
+    def generate(self, prompt: str, context: str, max_new_tokens: int | None = None) -> str: ...
 
 
 class SimulatedLLMBackend:
@@ -54,7 +54,7 @@ class SimulatedLLMBackend:
         self._serialise = serialise
         self._rng = random.Random(rng_seed)
 
-    def generate(self, prompt: str, context: str) -> str:
+    def generate(self, prompt: str, context: str, max_new_tokens: int | None = None) -> str:
         if self._rng.random() < self._failure_rate:
             raise LLMInferenceError("simulated transient inference failure")
 
@@ -147,7 +147,7 @@ class BatchedSimulatedLLMBackend:
         self._first_arrival_at: float | None = None
         self._executor_active = False
 
-    def generate(self, prompt: str, context: str) -> str:
+    def generate(self, prompt: str, context: str, max_new_tokens: int | None = None) -> str:
         if self._rng.random() < self._failure_rate:
             raise LLMInferenceError("simulated transient inference failure")
 
@@ -291,7 +291,8 @@ class HuggingFaceLLMBackend:
     def device(self) -> str:
         return self._device
 
-    def generate(self, prompt: str, context: str) -> str:
+    def generate(self, prompt: str, context: str, max_new_tokens: int | None = None) -> str:
+        tokens_limit = max_new_tokens if max_new_tokens is not None else self._max_new_tokens
         if "instruct" in self._model_name.lower() or "chat" in self._model_name.lower():
             messages = [
                 {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question."},
@@ -299,7 +300,7 @@ class HuggingFaceLLMBackend:
             ]
             outputs = self._pipeline(
                 messages,
-                max_new_tokens=self._max_new_tokens,
+                max_new_tokens=tokens_limit,
                 do_sample=True,
                 temperature=0.7,
                 repetition_penalty=1.2,
@@ -313,7 +314,7 @@ class HuggingFaceLLMBackend:
             )
             outputs = self._pipeline(
                 composed,
-                max_new_tokens=self._max_new_tokens,
+                max_new_tokens=tokens_limit,
                 do_sample=True,
                 temperature=0.7,
                 repetition_penalty=1.2,
@@ -332,8 +333,9 @@ class LLMInferenceEngine:
 
     def generate(self, request: Request, context: str) -> str:
         print(f"[llm] Generating response for {request.request_id}")
+        max_new_tokens = request.metadata.get("max_new_tokens")
         try:
-            return self._backend.generate(request.prompt, context)
+            return self._backend.generate(request.prompt, context, max_new_tokens=max_new_tokens)
         except LLMInferenceError:
             raise
         except Exception as exc:
