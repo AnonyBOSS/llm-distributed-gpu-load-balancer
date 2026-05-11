@@ -259,6 +259,24 @@ def admin_strategy(payload: dict) -> dict[str, str]:
     return {"strategy": strategy.value}
 
 
+@app.post("/admin/worker/{worker_id}/fail")
+def admin_fail_worker(worker_id: str) -> dict[str, object]:
+    """Manually fail a worker to demonstrate fault tolerance."""
+    for proxy in proxies:
+        if proxy.worker_id == worker_id:
+            return proxy.post_json("/admin/fail", {})
+    raise HTTPException(status_code=404, detail="worker not found")
+
+
+@app.post("/admin/worker/{worker_id}/recover")
+def admin_recover_worker(worker_id: str) -> dict[str, object]:
+    """Manually recover a failed worker."""
+    for proxy in proxies:
+        if proxy.worker_id == worker_id:
+            return proxy.post_json("/admin/recover", {})
+    raise HTTPException(status_code=404, detail="worker not found")
+
+
 @app.post("/admin/backend")
 def admin_backend_fanout(payload: dict) -> dict[str, object]:
     """Fan out a backend swap to every registered worker.

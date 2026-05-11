@@ -24,6 +24,9 @@ strategies plus a fault-injection scenario.
 The single-process simulation (`main.py`, `scripts/smoke_concurrent.py`)
 is preserved for fast local iteration and is what the unit tests target.
 
+![Dashboard UI showing Chat and Worker Status](docs/assets/ui_dashboard.png)
+![Dashboard UI showing fault tolerance and LB strategy](docs/assets/ui_fault_tolerance.png)
+
 ### Quickstart (distributed mode)
 
 ```bash
@@ -40,6 +43,7 @@ make down                                     # tear down
 | URL | What |
 |---|---|
 | <http://localhost:3000/d/cse354-overview> | Grafana dashboard (no login) |
+| <http://localhost:8080/> | Live Interactive Dashboard UI |
 | <http://localhost:9090/targets> | Prometheus scrape targets |
 | <http://localhost:9000/docs> | Master service auto-generated OpenAPI |
 | <http://localhost:7000/docs> | Load-balancer service OpenAPI |

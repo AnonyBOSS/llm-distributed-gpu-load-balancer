@@ -246,7 +246,7 @@ class HuggingFaceLLMBackend:
     def __init__(
         self,
         model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
-        max_new_tokens: int = 16,
+        max_new_tokens: int = 8,
         device: str = "auto",
     ) -> None:
         try:

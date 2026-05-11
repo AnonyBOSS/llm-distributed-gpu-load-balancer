@@ -9,21 +9,21 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0e17;--surface:#111827;--surface2:#1e293b;--border:#334155;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--radius:12px}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
 a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#a5b4fc}
 
 /* Layout */
-.header{background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e1b4b 100%);padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.header{flex-shrink:0;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e1b4b 100%);padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .header h1{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,#c7d2fe,#818cf8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .header .subtitle{font-size:.8rem;color:var(--text2);margin-top:2px}
 .badge{display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.15);color:var(--green);padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:600}
 .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-.main{display:grid;grid-template-columns:1fr 420px;gap:0;height:calc(100vh - 72px)}
+.main{flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 420px;gap:0}
 
 /* Chat Panel */
-.chat-panel{display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.chat-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
 .chat-header{padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
 .chat-header h2{font-size:1rem;font-weight:600}
 .chat-header p{font-size:.75rem;color:var(--text2);margin-top:4px}
@@ -60,7 +60,8 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 
 /* Worker Cards */
 .workers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.worker-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;transition:border-color .3s}
+.worker-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;transition:border-color .3s;position:relative}
+.worker-card .worker-header{display:flex;justify-content:space-between;align-items:flex-start}
 .worker-card.healthy{border-left:3px solid var(--green)}
 .worker-card.degraded{border-left:3px solid var(--yellow)}
 .worker-card.failed{border-left:3px solid var(--red)}
@@ -71,6 +72,10 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
 .worker-card.degraded .status-badge{background:rgba(234,179,8,.15);color:var(--yellow)}
 .worker-card.failed .status-badge{background:rgba(239,68,68,.15);color:var(--red)}
 .worker-card .tasks{font-size:.65rem;color:var(--text2);margin-top:4px}
+.fault-btn{background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:4px;padding:2px 6px;font-size:.65rem;cursor:pointer;transition:all .2s;}
+.fault-btn:hover{color:var(--text);border-color:var(--text);}
+.fault-btn.kill:hover{color:var(--red);border-color:var(--red);background:rgba(239,68,68,.1);}
+.fault-btn.recover:hover{color:var(--green);border-color:var(--green);background:rgba(34,197,94,.1);}
 
 /* Stats */
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -149,10 +154,10 @@ a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#
     <div class="section">
       <h3><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Worker Status</h3>
       <div class="workers" id="workerGrid">
-        <div class="worker-card healthy" id="w1"><div class="name">worker-1</div><div class="device">GPU (CUDA)</div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-        <div class="worker-card healthy" id="w2"><div class="name">worker-2</div><div class="device">GPU (CUDA)</div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-        <div class="worker-card healthy" id="w3"><div class="name">worker-3</div><div class="device">CPU</div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-        <div class="worker-card healthy" id="w4"><div class="name">worker-4</div><div class="device">CPU</div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
+        <div class="worker-card healthy" id="w1"><div class="worker-header"><div><div class="name">worker-1</div><div class="device">GPU (CUDA)</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-1', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
+        <div class="worker-card healthy" id="w2"><div class="worker-header"><div><div class="name">worker-2</div><div class="device">GPU (CUDA)</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-2', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
+        <div class="worker-card healthy" id="w3"><div class="worker-header"><div><div class="name">worker-3</div><div class="device">CPU</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-3', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
+        <div class="worker-card healthy" id="w4"><div class="worker-header"><div><div class="name">worker-4</div><div class="device">CPU</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-4', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
       </div>
     </div>
 
@@ -319,6 +324,22 @@ async function switchStrategy(strategy) {
   }
 }
 
+// Fault injection
+async function toggleFault(workerId, action) {
+  try {
+    const res = await fetch(`/admin/worker/${workerId}/${action}`, { method: 'POST' });
+    if (res.ok) {
+      addMessage(`${action === 'fail' ? 'Killed' : 'Recovered'} worker **${workerId}**`, 'bot', 'System', '', iconSvg(action === 'fail' ? 'warning' : 'success'));
+      updateWorkers();
+    } else {
+      const errText = await res.text();
+      throw new Error(`Server returned ${res.status}: ${errText}`);
+    }
+  } catch (e) {
+    addMessage(`Failed to ${action} ${workerId}: ` + e.message, 'bot', 'error', '', iconSvg('warning'));
+  }
+}
+
 // Benchmark
 let benchRunning = false;
 async function runBenchmark(n) {
@@ -350,6 +371,10 @@ async function runBenchmark(n) {
   let ok = 0, errors = 0, done = 0;
   const dist = {};
   const start = performance.now();
+  
+  // Poll more aggressively while benchmark is running
+  const activePoll = setInterval(updateWorkers, 500);
+
   const timerInt = setInterval(() => {
     timer.textContent = ((performance.now() - start) / 1000).toFixed(0) + 's';
   }, 1000);
@@ -358,7 +383,7 @@ async function runBenchmark(n) {
     const maxAttempts = 30, maxWait = 10000;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const res = await fetch('/request', {
+        const res = await fetch(API + '/request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_id: `bench-${i}-${attempt}`, user_id: `user-${i}`, prompt: prompts[i % prompts.length], metadata: {} })
@@ -390,6 +415,7 @@ async function runBenchmark(n) {
   await Promise.all(tasks);
 
   clearInterval(timerInt);
+  clearInterval(activePoll);
   errors = n - ok;
   const elapsed = ((performance.now() - start) / 1000).toFixed(1);
   const rps = (ok / parseFloat(elapsed)).toFixed(1);
@@ -424,6 +450,17 @@ async function updateWorkers() {
       card.className = 'worker-card ' + status;
       card.querySelector('.status-badge').textContent = statusMap[status] || status;
       card.querySelector('.tasks').textContent = `Active: ${w.active_tasks || 0} / Pending: ${w.pending_tasks || 0}`;
+      
+      const btn = card.querySelector('.fault-btn');
+      if (status === 'failed') {
+        btn.textContent = 'Recover';
+        btn.className = 'fault-btn recover';
+        btn.onclick = () => toggleFault(w.worker_id || `worker-${i+1}`, 'recover');
+      } else {
+        btn.textContent = 'Kill';
+        btn.className = 'fault-btn kill';
+        btn.onclick = () => toggleFault(w.worker_id || `worker-${i+1}`, 'fail');
+      }
     });
   } catch (e) { /* silent */ }
 }

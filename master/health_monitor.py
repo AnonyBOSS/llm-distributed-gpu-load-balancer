@@ -133,8 +133,12 @@ class HealthMonitor:
         try:
             r = await self._client.get(f"{proxy.url}/health")
             r.raise_for_status()
-            self._on_success(proxy)
-        except (httpx.HTTPError, ValueError):
+            data = r.json()
+            if data.get("status") == "failed":
+                self._on_failure(proxy)
+            else:
+                self._on_success(proxy)
+        except (httpx.HTTPError, ValueError, KeyError):
             self._on_failure(proxy)
 
     def _on_success(self, proxy: RemoteWorkerProxy) -> None:
