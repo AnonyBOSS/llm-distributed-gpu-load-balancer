@@ -324,4 +324,204 @@ DEFAULT_CORPUS: tuple[Document, ...] = (
             "has an imperceptible impact on retrieval latency."
         ),
     ),
+    Document(
+        doc_id="doc-031",
+        title="Kubernetes Orchestration",
+        text=(
+            "Kubernetes is an open-source container orchestration system that automates "
+            "software deployment, scaling, and management. It groups containers that "
+            "make up an application into logical units for easy management and discovery, "
+            "handling health checks, rolling updates, and dynamic scaling."
+        ),
+    ),
+    Document(
+        doc_id="doc-032",
+        title="Asynchronous Programming with Asyncio",
+        text=(
+            "Python's asyncio library provides a foundation for writing concurrent "
+            "code using the async/await syntax. By yielding control back to an event "
+            "loop during I/O operations, a single thread can handle thousands of "
+            "concurrent network connections efficiently without OS-level thread overhead."
+        ),
+    ),
+    Document(
+        doc_id="doc-033",
+        title="Graph Databases",
+        text=(
+            "Graph databases like Neo4j represent data as nodes and edges rather than "
+            "relational tables. They excel at querying highly interconnected data, "
+            "such as social networks or recommendation systems, where traversing "
+            "deep relationships in SQL would require prohibitively slow JOIN operations."
+        ),
+    ),
+    Document(
+        doc_id="doc-034",
+        title="Redis Caching Patterns",
+        text=(
+            "Redis is an in-memory data structure store often used as a distributed "
+            "cache. Common patterns include 'Cache-Aside' where the application checks "
+            "the cache before querying the database, and 'Write-Through' where data is "
+            "written to both the cache and database simultaneously to prevent stale reads."
+        ),
+    ),
+    Document(
+        doc_id="doc-035",
+        title="Event-Driven Architecture with Kafka",
+        text=(
+            "Apache Kafka is a distributed event streaming platform. In an event-driven "
+            "architecture, services communicate asynchronously by publishing and "
+            "subscribing to streams of events. This decouples microservices, allowing "
+            "systems to absorb massive traffic spikes by buffering events in topics."
+        ),
+    ),
+    Document(
+        doc_id="doc-036",
+        title="Zero Trust Security",
+        text=(
+            "Zero Trust is a cybersecurity paradigm that discards the traditional 'castle "
+            "and moat' approach. It operates on the principle of 'never trust, always "
+            "verify,' requiring strict identity verification and least-privilege access "
+            "for every person and device, regardless of whether they are on the VPN."
+        ),
+    ),
+    Document(
+        doc_id="doc-037",
+        title="Multi-Head Attention Mechanism",
+        text=(
+            "In Transformer models, the Multi-Head Attention mechanism allows the model "
+            "to jointly attend to information from different representation subspaces "
+            "at different positions. By computing attention multiple times in parallel "
+            "and concatenating the results, the model captures complex contextual relationships."
+        ),
+    ),
+    Document(
+        doc_id="doc-038",
+        title="Gradient Descent Optimizers",
+        text=(
+            "Optimizers update neural network weights to minimize loss. While basic "
+            "Stochastic Gradient Descent (SGD) takes steps proportional to the gradient, "
+            "modern optimizers like Adam combine momentum (moving average of past gradients) "
+            "and RMSprop (adaptive learning rates) to converge faster and more reliably."
+        ),
+    ),
+    Document(
+        doc_id="doc-039",
+        title="JSON Web Tokens (JWT)",
+        text=(
+            "JWT is a compact, URL-safe means of representing claims between two parties. "
+            "A token consists of a header, payload, and signature. Because the server "
+            "can verify the signature cryptographically without querying a database, JWTs "
+            "are highly scalable for stateless API authentication."
+        ),
+    ),
+    Document(
+        doc_id="doc-040",
+        title="gRPC and Protocol Buffers",
+        text=(
+            "gRPC is a high-performance RPC framework that uses HTTP/2 for transport and "
+            "Protocol Buffers (Protobufs) as its interface description language. Protobufs "
+            "serialize structured data into a dense binary format, making gRPC significantly "
+            "faster and more bandwidth-efficient than JSON-over-HTTP."
+        ),
+    ),
+    Document(
+        doc_id="doc-041",
+        title="Serverless Computing",
+        text=(
+            "Serverless computing allows developers to build and run applications without "
+            "managing infrastructure. Platforms like AWS Lambda automatically provision "
+            "resources and scale precisely with the workload. Users pay only for the exact "
+            "compute time consumed down to the millisecond."
+        ),
+    ),
+    Document(
+        doc_id="doc-042",
+        title="Consistent Hashing",
+        text=(
+            "Consistent hashing is a distributed routing technique that minimizes the "
+            "number of keys that need to be remapped when a node is added or removed "
+            "from a cluster. It maps both data keys and server nodes onto a logical "
+            "ring, which is foundational for systems like Cassandra and DynamoDB."
+        ),
+    ),
+    Document(
+        doc_id="doc-043",
+        title="The CAP Theorem",
+        text=(
+            "The CAP Theorem states that a distributed data store can only guarantee "
+            "two out of three properties simultaneously: Consistency, Availability, "
+            "and Partition Tolerance. Since network partitions are inevitable in real "
+            "networks, distributed systems must generally trade off between C and A."
+        ),
+    ),
+    Document(
+        doc_id="doc-044",
+        title="B-Tree Indexes in SQL",
+        text=(
+            "Relational databases use B-Tree (balanced tree) structures for indexing "
+            "columns. B-Trees keep data sorted and allow searches, sequential access, "
+            "insertions, and deletions in logarithmic time. They are optimized for "
+            "systems that read and write large blocks of data."
+        ),
+    ),
+    Document(
+        doc_id="doc-045",
+        title="React Virtual DOM",
+        text=(
+            "React improves UI performance using a Virtual DOM—an in-memory representation "
+            "of the actual browser DOM. When component state changes, React computes a "
+            "diff against the previous Virtual DOM and applies only the minimal set of "
+            "changes required to update the real DOM, avoiding expensive layout thrashing."
+        ),
+    ),
+    Document(
+        doc_id="doc-046",
+        title="WebAssembly (Wasm)",
+        text=(
+            "WebAssembly is a binary instruction format designed as a portable compilation "
+            "target for high-level languages like C, C++, and Rust. It enables deployment "
+            "of high-performance applications on the web, running at near-native speed "
+            "alongside standard JavaScript."
+        ),
+    ),
+    Document(
+        doc_id="doc-047",
+        title="Chaos Engineering",
+        text=(
+            "Chaos Engineering is the discipline of experimenting on a system in order to "
+            "build confidence in its capability to withstand turbulent conditions in "
+            "production. By intentionally injecting failures like network latency or "
+            "crashed nodes, teams can uncover hidden weaknesses before they cause outages."
+        ),
+    ),
+    Document(
+        doc_id="doc-048",
+        title="WebSockets for Real-time Communication",
+        text=(
+            "The WebSocket API provides a persistent, full-duplex communication channel "
+            "over a single TCP connection. Unlike HTTP polling, WebSockets allow servers "
+            "to push data to the client instantly as events occur, making them ideal for "
+            "chat applications, live feeds, and multiplayer games."
+        ),
+    ),
+    Document(
+        doc_id="doc-049",
+        title="Continuous Integration and Continuous Deployment (CI/CD)",
+        text=(
+            "CI/CD automates the software release process. Continuous Integration merges "
+            "code changes into a central repository, triggering automated builds and tests. "
+            "Continuous Deployment automates the release of validated changes directly to "
+            "production environments, enabling fast and safe feature delivery."
+        ),
+    ),
+    Document(
+        doc_id="doc-050",
+        title="Parameter-Efficient Fine-Tuning (PEFT)",
+        text=(
+            "PEFT methods adapt large pre-trained language models to downstream applications "
+            "without fine-tuning all model parameters. Techniques like Low-Rank Adaptation "
+            "(LoRA) freeze the original weights and inject trainable rank decomposition "
+            "matrices into each layer, drastically reducing memory and compute costs."
+        ),
+    ),
 )
