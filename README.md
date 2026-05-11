@@ -19,13 +19,12 @@ The repository runs as a real distributed system: each component is its own
 FastAPI process in its own Docker container, with active health monitoring,
 Prometheus + Grafana observability, a pytest CI suite, and a benchmark
 harness that drives the full 100→1000 user ramp across all three LB
-strategies plus a fault-injection scenario.
+strategies plus a fault-injection scenario. An interactive web dashboard provides real-time chat, live worker monitoring, benchmark execution, and fault injection.
+
+![Dashboard UI showing Chat and Worker Status](docs/assets/ui_dashboard.png)
 
 The single-process simulation (`main.py`, `scripts/smoke_concurrent.py`)
 is preserved for fast local iteration and is what the unit tests target.
-
-![Dashboard UI showing Chat and Worker Status](docs/assets/ui_dashboard.png)
-![Dashboard UI showing fault tolerance and LB strategy](docs/assets/ui_fault_tolerance.png)
 
 ### Quickstart (distributed mode)
 
@@ -356,7 +355,10 @@ This routes the LLM step through `transformers.pipeline("text-generation", model
 
 The fault-tolerance flow has three independent levers and one final guardrail:
 
-1. **Hard failure (`mark_failed()`)** — operator-style failure. The next `process()` call raises immediately, so no work is wasted on a dead node, and the load balancer drops the worker from the candidate pool.
+1. **Hard failure (`mark_failed()`)** — operator-style failure. The next `process()` call raises immediately, so no work is wasted on a dead node, and the load balancer drops the worker from the candidate pool. You can trigger this dynamically via the "Kill" and "Recover" buttons in the Live Dashboard UI.
+
+![Dashboard UI showing fault tolerance and LB strategy](docs/assets/ui_fault_tolerance.png)
+
 2. **Transient failure (`failure_rate`)** — probabilistic. Lets the test surface flaky behaviour where a worker sometimes errors but is otherwise healthy.
 3. **LLM failure** — the simulated backend can also be configured with a non-zero `failure_rate`, so an isolated inference error can be tested without making the whole worker bad.
 4. **Scheduler retry** — `MasterScheduler` catches every failure and replays the request on the next-best worker up to `max_retries + 1` total attempts. Per-worker successes and failures are recorded.
