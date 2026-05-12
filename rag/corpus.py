@@ -528,10 +528,22 @@ DEFAULT_CORPUS: tuple[Document, ...] = (
         doc_id="doc-051",
         title="Project Overview: Distributed LLM Load Balancer",
         text=(
-            "The current system is a 'Distributed LLM GPU Load Balancer'. It is a "
-            "Python-based, containerized cluster designed to serve Large Language Models "
-            "(like Qwen2.5-0.5B-Instruct) across multiple worker nodes. It demonstrates "
-            "advanced load balancing strategies, RAG integration, and fault tolerance."
+            "This project is a distributed GPU load balancer for serving Large Language Model "
+            "inference at scale. It is a CSE354 Distributed Computing project titled "
+            "'Efficient Load Balancing and GPU Cluster Task Distribution for Handling 1000+ "
+            "Concurrent LLM Requests'. Client requests flow through nginx on port 8080, then "
+            "to a load balancer service on port 7000, then to one of two master services on "
+            "ports 9000 and 9001, and finally to one of four GPU worker nodes on port 8000. "
+            "Each worker runs a real LLM — Qwen/Qwen2.5-0.5B-Instruct — using HuggingFace "
+            "transformers on GPU (bfloat16) or CPU (float32). Before inference, the master "
+            "enriches the user prompt with relevant context retrieved from an 85-document "
+            "corpus using RAG (Retrieval-Augmented Generation). Four load balancing strategies "
+            "are supported: round_robin, least_connections, load_aware, and power_of_two. "
+            "Fault tolerance uses a 3-strike circuit breaker, active health monitoring every "
+            "second, per-request retries, and dual-master redundancy. Prometheus and Grafana "
+            "provide real-time observability. The system is fully containerised with Docker "
+            "Compose and includes a web dashboard UI for chat, monitoring, benchmarking, and "
+            "fault injection without using the terminal."
         ),
     ),
     Document(
