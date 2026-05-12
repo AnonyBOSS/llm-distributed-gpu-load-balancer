@@ -867,7 +867,7 @@ function logFaultEvent(type, msg) {
 async function startBenchmark() {
   if (benchRunning) return;
   const n = parseInt(document.getElementById('benchUsers').value) || 100;
-  const concurrency = Math.min(parseInt(document.getElementById('benchConcurrency').value) || 10, 50);
+  const concurrency = Math.max(1, parseInt(document.getElementById('benchConcurrency').value) || 10);
   const strategy = document.getElementById('benchStrategy').value;
 
   // Switch strategy first
