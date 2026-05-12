@@ -12,6 +12,7 @@ Configure via env vars:
     MASTER_MAX_INFLIGHT       (default: 100) -- capacity hint per master for load_aware
     MASTER_HTTP_TIMEOUT_SEC   (default: 60.0)
     THREADPOOL_TOKENS         (default: 1000)
+    LB_MASTER_RETRIES         (default: 1) -- extra masters to try after first failure
 
 Endpoints:
     GET  /                — liveness
@@ -31,6 +32,7 @@ from common.metrics import MetricsBundle
 from common.wire import RequestPayload, ResponsePayload
 from lb import LoadBalancer, LoadBalancingStrategy
 from master.health_monitor import HealthMonitor
+from workers import WorkerTransientError
 from workers.remote_proxy import RemoteWorkerProxy
 
 
@@ -54,6 +56,7 @@ LB_STRATEGY_RAW = os.environ.get("LB_STRATEGY", "round_robin").strip().lower()
 MASTER_MAX_INFLIGHT = _env_int("MASTER_MAX_INFLIGHT", 100)
 MASTER_HTTP_TIMEOUT = _env_float("MASTER_HTTP_TIMEOUT_SEC", 60.0)
 THREADPOOL_TOKENS = _env_int("THREADPOOL_TOKENS", 1000)
+LB_MASTER_RETRIES = max(0, _env_int("LB_MASTER_RETRIES", 1))
 MONITOR_INTERVAL = _env_float("MONITOR_INTERVAL_SEC", 1.0)
 MONITOR_TIMEOUT = _env_float("MONITOR_TIMEOUT_SEC", 0.5)
 MONITOR_FAIL_THRESHOLD = _env_int("MONITOR_FAIL_THRESHOLD", 3)
@@ -183,19 +186,29 @@ def handle_request(payload: RequestPayload) -> ResponsePayload:
         raise HTTPException(status_code=503, detail="lb not initialised")
 
     request = payload.to_dataclass()
-    try:
-        master = load_balancer.select_worker(request)
-    except RuntimeError as exc:
-        metrics_bundle.requests_total.labels("lb", "no-master", "all").inc()
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    last_exc: Exception | None = None
 
-    try:
-        with metrics_bundle.time_request(target=master.worker_id):
-            body = master.post_json("/request", payload.model_dump())
-            return ResponsePayload.model_validate(body)
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001 -- post_json raises WorkerTransientError, body validation can also fail
-        raise HTTPException(status_code=502, detail=f"master error: {exc}") from exc
-    finally:
-        master.release()
+    for _ in range(LB_MASTER_RETRIES + 1):
+        try:
+            master = load_balancer.select_worker(request)
+        except RuntimeError as exc:
+            metrics_bundle.requests_total.labels("lb", "no-master", "all").inc()
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        try:
+            with metrics_bundle.time_request(target=master.worker_id):
+                body = master.post_json("/request", payload.model_dump())
+                return ResponsePayload.model_validate(body)
+        except WorkerTransientError as exc:
+            last_exc = exc
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"master error: {exc}") from exc
+        finally:
+            master.release()
+
+    raise HTTPException(
+        status_code=503,
+        detail=f"all masters exhausted after {LB_MASTER_RETRIES + 1} attempts: {last_exc}",
+    )
