@@ -27,6 +27,7 @@ import os
 
 import anyio
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from common.metrics import MetricsBundle
 from common.wire import RequestPayload, ResponsePayload
@@ -87,6 +88,12 @@ def _resolve_strategy(name: str) -> LoadBalancingStrategy:
 
 
 app = FastAPI(title="lb")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080"],
+    allow_methods=["POST", "GET"],
+    allow_headers=["*"],
+)
 metrics_bundle = MetricsBundle(service="lb")
 
 # Globals populated by startup. Each master is wrapped in a RemoteWorkerProxy

@@ -133,6 +133,7 @@ class RAGRetriever:
 
 # ── Module-level BM25 helpers (pure functions, easy to unit-test) ──────────────
 
+
 def _tokenize(text: str) -> list[str]:
     return [w for w in text.lower().split() if len(w) > 2]
 

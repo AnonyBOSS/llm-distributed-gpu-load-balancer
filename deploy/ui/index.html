@@ -679,7 +679,7 @@ document.getElementById('chatInput').addEventListener('keydown', e => {
 // ─── Strategy switch ──────────────────────────────────────────────
 async function switchStrategy(strategy, btn) {
   try {
-    const res = await fetch('/admin/strategy', {
+    const res = await fetch('http://localhost:9000/admin/strategy', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({strategy})
     });
@@ -698,7 +698,7 @@ async function switchStrategy(strategy, btn) {
 // ─── Worker polling ───────────────────────────────────────────────
 async function pollWorkers() {
   try {
-    const res = await fetch('/workers');
+    const res = await fetch('http://localhost:9000/workers');
     if (!res.ok) return;
     const workers = await res.json();
     if (!Array.isArray(workers)) return;
@@ -771,7 +771,7 @@ function updateFaultWorkers(workers) {
 // ─── Master polling ───────────────────────────────────────────────
 async function pollMasters() {
   try {
-    const res = await fetch('/admin/masters');
+    const res = await fetch('http://localhost:7000/admin/masters');
     if (!res.ok) return;
     const masters = await res.json();
     if (!Array.isArray(masters)) return;
@@ -820,7 +820,7 @@ function updateFaultMasters(masters) {
 // ─── LB health ────────────────────────────────────────────────────
 async function pollLbHealth() {
   try {
-    const res = await fetch('/health');
+    const res = await fetch('http://localhost:7000/health');
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('monLbMeta').textContent =
@@ -834,9 +834,11 @@ async function pollLbHealth() {
 
 // ─── Fault injection ──────────────────────────────────────────────
 async function faultAction(type, id, action) {
+  // Bypass nginx (port 8080) — direct to LB/master so kill requests are never
+  // queued behind saturated benchmark connections on the shared origin.
   const url = type === 'master'
-    ? `/admin/master/${id}/${action}`
-    : `/admin/worker/${id}/${action}`;
+    ? `http://localhost:7000/admin/master/${id}/${action}`
+    : `http://localhost:9000/admin/worker/${id}/${action}`;
   try {
     const res = await fetch(url, {method:'POST'});
     const ok = res.ok;
@@ -871,7 +873,7 @@ async function startBenchmark() {
   const strategy = document.getElementById('benchStrategy').value;
 
   // Switch strategy first
-  await fetch('/admin/strategy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy})}).catch(()=>{});
+  await fetch('http://localhost:9000/admin/strategy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy})}).catch(()=>{});
 
   benchRunning = true; benchStop = false;
   document.getElementById('benchRunBtn').disabled = true;
