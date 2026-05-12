@@ -449,7 +449,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
       <div class="fault-grid" id="faultWorkersGrid">
         <div class="fault-entity unknown" id="faultW1">
           <div class="fault-ent-top">
-            <div><div class="fault-ent-name">gpu-worker-1</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <div><div class="fault-ent-name">gpu-worker-1</div><div class="fault-ent-type">WORKER · —</div></div>
             <span class="fault-status-pill unknown" id="faultW1Pill">LOADING</span>
           </div>
           <div class="fault-ent-meta" id="faultW1Meta">Connecting…</div>
@@ -460,7 +460,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
         </div>
         <div class="fault-entity unknown" id="faultW2">
           <div class="fault-ent-top">
-            <div><div class="fault-ent-name">gpu-worker-2</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <div><div class="fault-ent-name">gpu-worker-2</div><div class="fault-ent-type">WORKER · —</div></div>
             <span class="fault-status-pill unknown" id="faultW2Pill">LOADING</span>
           </div>
           <div class="fault-ent-meta" id="faultW2Meta">Connecting…</div>
@@ -471,7 +471,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
         </div>
         <div class="fault-entity unknown" id="faultW3">
           <div class="fault-ent-top">
-            <div><div class="fault-ent-name">gpu-worker-3</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <div><div class="fault-ent-name">gpu-worker-3</div><div class="fault-ent-type">WORKER · —</div></div>
             <span class="fault-status-pill unknown" id="faultW3Pill">LOADING</span>
           </div>
           <div class="fault-ent-meta" id="faultW3Meta">Connecting…</div>
@@ -482,7 +482,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
         </div>
         <div class="fault-entity unknown" id="faultW4">
           <div class="fault-ent-top">
-            <div><div class="fault-ent-name">gpu-worker-4</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <div><div class="fault-ent-name">gpu-worker-4</div><div class="fault-ent-type">WORKER · —</div></div>
             <span class="fault-status-pill unknown" id="faultW4Pill">LOADING</span>
           </div>
           <div class="fault-ent-meta" id="faultW4Meta">Connecting…</div>
@@ -760,6 +760,8 @@ function updateFaultWorkers(workers) {
     document.getElementById('faultW'+key.slice(1)+'Pill').textContent = statusLabel(w.status);
     document.getElementById('faultW'+key.slice(1)+'Meta').innerHTML =
       `active: <span>${w.active_tasks??'—'}</span> · pending: <span>${w.pending_tasks??'—'}</span>`;
+    const typeEl = card.querySelector('.fault-ent-type');
+    if (typeEl && w.gpu_name) typeEl.textContent = `WORKER · ${w.gpu_name}`;
     const failed = w.status === 'failed';
     document.getElementById('faultW'+key.slice(1)+'Kill').disabled = failed;
     document.getElementById('faultW'+key.slice(1)+'Rec').disabled = !failed;

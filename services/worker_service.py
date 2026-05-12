@@ -65,7 +65,24 @@ def _env_float(name: str, default: float) -> float:
 
 
 WORKER_ID = os.environ.get("WORKER_ID", "gpu-worker-1")
-GPU_NAME = os.environ.get("GPU_NAME", "NVIDIA-A100-SIM")
+_LLM_BACKEND = os.environ.get("LLM_BACKEND", "sim")
+_LLM_DEVICE = os.environ.get("LLM_DEVICE", "cpu")
+
+def _detect_gpu_name() -> str:
+    explicit = os.environ.get("GPU_NAME", "")
+    if explicit and explicit != "NVIDIA-A100-SIM":
+        return explicit
+    if _LLM_BACKEND == "hf":
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return torch.cuda.get_device_name(0)
+            return f"CPU ({_LLM_DEVICE})"
+        except Exception:
+            pass
+    return explicit or "NVIDIA-A100-SIM"
+
+GPU_NAME = _detect_gpu_name()
 MAX_CONCURRENT = _env_int("MAX_CONCURRENT_TASKS", 8)
 FAILURE_RATE = _env_float("FAILURE_RATE", 0.0)
 THREADPOOL_TOKENS = _env_int("THREADPOOL_TOKENS", 1000)

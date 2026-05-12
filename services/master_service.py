@@ -145,12 +145,15 @@ async def _on_startup() -> None:
     # don't answer keep the env-default capacity.
     for proxy in proxies:
         info = proxy.probe_health()
-        if info is not None and info.max_concurrent_tasks > 0:
-            proxy.max_concurrent_tasks = info.max_concurrent_tasks
-            print(
-                f"[master-svc] {proxy.worker_id}: adopting "
-                f"max_concurrent_tasks={info.max_concurrent_tasks} from worker"
-            )
+        if info is not None:
+            if info.max_concurrent_tasks > 0:
+                proxy.max_concurrent_tasks = info.max_concurrent_tasks
+                print(
+                    f"[master-svc] {proxy.worker_id}: adopting "
+                    f"max_concurrent_tasks={info.max_concurrent_tasks} from worker"
+                )
+            if info.gpu_name:
+                proxy.gpu_name = info.gpu_name
 
     strategy = _resolve_strategy(LB_STRATEGY_RAW)
     # LoadBalancer's static type hints want GPUWorkerNode but it only touches
