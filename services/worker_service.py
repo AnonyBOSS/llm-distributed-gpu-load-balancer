@@ -68,6 +68,7 @@ WORKER_ID = os.environ.get("WORKER_ID", "gpu-worker-1")
 _LLM_BACKEND = os.environ.get("LLM_BACKEND", "sim")
 _LLM_DEVICE = os.environ.get("LLM_DEVICE", "cpu")
 
+
 def _detect_gpu_name() -> str:
     explicit = os.environ.get("GPU_NAME", "")
     if explicit and explicit != "NVIDIA-A100-SIM":
@@ -75,12 +76,14 @@ def _detect_gpu_name() -> str:
     if _LLM_BACKEND == "hf":
         try:
             import torch
+
             if torch.cuda.is_available():
                 return torch.cuda.get_device_name(0)
             return f"CPU ({_LLM_DEVICE})"
         except Exception:
             pass
     return explicit or "NVIDIA-A100-SIM"
+
 
 GPU_NAME = _detect_gpu_name()
 MAX_CONCURRENT = _env_int("MAX_CONCURRENT_TASKS", 8)
