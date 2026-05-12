@@ -36,11 +36,7 @@ class RAGRetriever:
 
     def retrieve_context(self, request: Request) -> str:
         if self._use_stub:
-            doc = self._corpus[abs(hash(request.request_id)) % len(self._corpus)]
-            print(
-                f"[rag] Retrieved stub context for {request.request_id} " f"(doc_id={doc.doc_id})"
-            )
-            return f"{doc.title}\n{doc.text}"
+            return self._stub_retrieve(request)
 
         self._ensure_index()
         assert self._model is not None and self._index is not None
@@ -67,6 +63,23 @@ class RAGRetriever:
             f"({', '.join(matched_ids) or 'none'})"
         )
         return "\n---\n".join(snippets) if snippets else ""
+
+    def _stub_retrieve(self, request: Request) -> str:
+        """Keyword-scored retrieval — no model download needed for tests."""
+        query_words = set(request.prompt.lower().split())
+        scored: list[tuple[int, Document]] = []
+        for doc in self._corpus:
+            haystack = f"{doc.title} {doc.text}".lower()
+            score = sum(1 for w in query_words if len(w) > 2 and w in haystack)
+            scored.append((score, doc))
+        scored.sort(key=lambda x: -x[0])
+        top = [doc for _, doc in scored[: self._top_k]]
+        ids = [d.doc_id for d in top]
+        print(
+            f"[rag] Stub retrieved {len(top)} doc(s) for {request.request_id} "
+            f"({', '.join(ids) or 'none'})"
+        )
+        return "\n---\n".join(f"{doc.title}\n{doc.text}" for doc in top) if top else ""
 
     def _ensure_index(self) -> None:
         if self._index is not None:

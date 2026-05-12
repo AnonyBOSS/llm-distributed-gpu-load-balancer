@@ -675,4 +675,227 @@ DEFAULT_CORPUS: tuple[Document, ...] = (
             "solves this by dividing queue depth by node capacity, steering most traffic to the GPUs."
         ),
     ),
+    Document(
+        doc_id="doc-066",
+        title="Dual-Master Fault Tolerance",
+        text=(
+            "Running two master instances behind the load balancer eliminates the master "
+            "as a single point of failure. The LB tier uses a retry loop: if the first "
+            "master returns a transient error, the request is replayed on the second master "
+            "transparently. Both masters are stateless and share the same worker pool, so "
+            "they can be killed or recovered independently without losing requests."
+        ),
+    ),
+    Document(
+        doc_id="doc-067",
+        title="LB-Tier Master Retry",
+        text=(
+            "The load balancer's LB_MASTER_RETRIES environment variable controls how many "
+            "additional master attempts are made after the first fails. With two masters and "
+            "LB_MASTER_RETRIES=1, a dead master causes at most one retry and zero lost "
+            "requests. The LB exposes /admin/master/{id}/fail and /admin/master/{id}/recover "
+            "endpoints for fault injection in the Fault Lab UI."
+        ),
+    ),
+    Document(
+        doc_id="doc-068",
+        title="Prompt Engineering",
+        text=(
+            "Prompt engineering shapes how a language model interprets a request. "
+            "Clear instructions, few-shot examples, chain-of-thought prompts, and "
+            "role assignments all influence output quality. In RAG systems the retrieved "
+            "context is injected before the user question so the model can ground its "
+            "answer in retrieved facts rather than parametric knowledge."
+        ),
+    ),
+    Document(
+        doc_id="doc-069",
+        title="Context Window and Token Limits",
+        text=(
+            "Every language model has a maximum context length measured in tokens. "
+            "Qwen2.5-0.5B-Instruct supports up to 32 768 tokens. Requests that exceed "
+            "this limit must be truncated or chunked. In RAG pipelines, retrieved context "
+            "competes with the user prompt for available context window space, so "
+            "top_k and chunk size must be tuned to leave room for the answer."
+        ),
+    ),
+    Document(
+        doc_id="doc-070",
+        title="Temperature and Sampling in LLMs",
+        text=(
+            "Temperature controls the randomness of a language model's output. Low "
+            "temperatures (near 0) make the model deterministic and conservative; high "
+            "temperatures (above 1) increase diversity but risk incoherence. Top-p "
+            "sampling (nucleus sampling) restricts candidates to the smallest set whose "
+            "cumulative probability exceeds p, balancing diversity and coherence."
+        ),
+    ),
+    Document(
+        doc_id="doc-071",
+        title="KV-Cache in Transformer Inference",
+        text=(
+            "The key-value cache stores intermediate attention tensors so that previously "
+            "processed tokens do not need to be recomputed on each decoding step. This "
+            "reduces autoregressive generation from O(n²) to O(n) per step. KV-cache "
+            "lives in VRAM and grows linearly with sequence length and batch size, making "
+            "it a primary driver of GPU memory usage during inference."
+        ),
+    ),
+    Document(
+        doc_id="doc-072",
+        title="Speculative Decoding",
+        text=(
+            "Speculative decoding uses a small draft model to propose several tokens at "
+            "once, then verifies them in parallel with the large target model. Accepted "
+            "tokens are kept; rejected ones are resampled. This exploits the target model's "
+            "ability to verify faster than it can generate, improving throughput by 2-3× "
+            "without changing output distribution."
+        ),
+    ),
+    Document(
+        doc_id="doc-073",
+        title="Tensor Parallelism",
+        text=(
+            "Tensor parallelism splits individual weight matrices across multiple GPUs so "
+            "that each GPU holds only a shard of each layer. Matrix multiplications are "
+            "computed in parallel and results are combined with an all-reduce operation. "
+            "It allows models larger than a single GPU's VRAM to run efficiently, at the "
+            "cost of high-bandwidth GPU interconnect (NVLink or InfiniBand)."
+        ),
+    ),
+    Document(
+        doc_id="doc-074",
+        title="Pipeline Parallelism",
+        text=(
+            "Pipeline parallelism assigns different layers of a model to different GPUs. "
+            "Micro-batches flow through the pipeline stage by stage, keeping all GPUs "
+            "busy. Bubble time (idle GPU cycles between micro-batches) is the main "
+            "overhead. Combining pipeline and tensor parallelism is called 3D parallelism "
+            "and is used to train and serve very large models like GPT-4."
+        ),
+    ),
+    Document(
+        doc_id="doc-075",
+        title="Continuous Batching for LLM Serving",
+        text=(
+            "Continuous batching (also called iteration-level scheduling) allows new "
+            "requests to join a running batch at each decode step rather than waiting "
+            "for the entire batch to finish. This dramatically improves GPU utilisation "
+            "because short requests free their slot immediately, and systems like vLLM "
+            "and TGI use it to serve hundreds of concurrent users on a single GPU."
+        ),
+    ),
+    Document(
+        doc_id="doc-076",
+        title="Paged Attention",
+        text=(
+            "Paged attention manages the KV-cache using fixed-size memory pages inspired "
+            "by OS virtual memory. Instead of pre-allocating a contiguous block for each "
+            "sequence, pages are allocated on demand and can be shared between parallel "
+            "sampling candidates. vLLM introduced paged attention to nearly eliminate "
+            "KV-cache fragmentation and increase effective batch size."
+        ),
+    ),
+    Document(
+        doc_id="doc-077",
+        title="RLHF: Reinforcement Learning from Human Feedback",
+        text=(
+            "RLHF aligns a language model with human preferences by training a reward "
+            "model on human comparisons, then fine-tuning the LLM with PPO to maximise "
+            "that reward. It is the technique behind InstructGPT, ChatGPT, and most "
+            "modern instruction-following models. RLHF significantly reduces harmful "
+            "outputs and improves instruction adherence over pure supervised fine-tuning."
+        ),
+    ),
+    Document(
+        doc_id="doc-078",
+        title="Embedding Models and Sentence Transformers",
+        text=(
+            "Sentence transformer models like all-MiniLM-L6-v2 encode text into dense "
+            "vectors where semantic similarity corresponds to vector proximity. They are "
+            "trained with contrastive objectives on sentence pairs. Smaller models "
+            "(22 M parameters) encode at thousands of sentences per second on CPU; "
+            "larger models like bge-large or E5 offer higher accuracy at greater cost."
+        ),
+    ),
+    Document(
+        doc_id="doc-079",
+        title="Chunking Strategies for RAG",
+        text=(
+            "RAG corpora are split into chunks before indexing so that retrieved passages "
+            "fit within the context window. Fixed-size chunking splits by token count; "
+            "sentence-aware chunking preserves sentence boundaries; recursive chunking "
+            "splits on paragraph then sentence boundaries. Chunk size trades recall "
+            "(smaller chunks, more precise hits) against context (larger chunks, "
+            "more surrounding information per retrieved document)."
+        ),
+    ),
+    Document(
+        doc_id="doc-080",
+        title="Reranking in RAG Pipelines",
+        text=(
+            "A reranker is a cross-encoder model that scores each (query, document) pair "
+            "jointly, giving much more accurate relevance scores than bi-encoder embedding "
+            "similarity. In a two-stage pipeline, a fast bi-encoder retrieves the top-50 "
+            "candidates and a reranker selects the top-3. Common rerankers include "
+            "ms-marco-MiniLM-L-6-v2 and Cohere Rerank."
+        ),
+    ),
+    Document(
+        doc_id="doc-081",
+        title="Hybrid Search: BM25 and Dense Retrieval",
+        text=(
+            "Hybrid search combines sparse keyword matching (BM25) with dense vector "
+            "retrieval. BM25 is strong on exact keyword matches and rare terms; dense "
+            "retrieval handles paraphrases and semantic similarity. Reciprocal Rank "
+            "Fusion (RRF) merges the two ranked lists without requiring score "
+            "normalisation and consistently outperforms either method alone."
+        ),
+    ),
+    Document(
+        doc_id="doc-082",
+        title="Hallucination in Large Language Models",
+        text=(
+            "Hallucination occurs when a language model generates factually incorrect "
+            "or fabricated content with apparent confidence. It arises because models "
+            "are trained to produce fluent text, not verified facts. RAG reduces "
+            "hallucination by grounding answers in retrieved documents, but the model "
+            "can still ignore or misread the context. Faithfulness evaluation metrics "
+            "like RAGAS measure how well answers stay grounded in retrieved evidence."
+        ),
+    ),
+    Document(
+        doc_id="doc-083",
+        title="FastAPI and Pydantic",
+        text=(
+            "FastAPI is a modern Python web framework built on Starlette and Pydantic. "
+            "Request and response bodies are declared as Pydantic models, which provide "
+            "automatic validation, serialisation, and OpenAPI schema generation. FastAPI "
+            "supports both async and sync route handlers; sync routes run in a threadpool "
+            "so they do not block the event loop."
+        ),
+    ),
+    Document(
+        doc_id="doc-084",
+        title="Circuit Breaker Pattern",
+        text=(
+            "The circuit breaker pattern prevents a failing dependency from cascading "
+            "failures across a system. After a threshold of consecutive failures the "
+            "breaker opens and subsequent calls fail immediately without hitting the "
+            "downstream service. After a timeout the breaker moves to half-open, allows "
+            "one probe request, and closes again if it succeeds. This project implements "
+            "a 3-strike circuit breaker in the health monitor."
+        ),
+    ),
+    Document(
+        doc_id="doc-085",
+        title="Prometheus Metrics and Labels",
+        text=(
+            "Prometheus metrics use labels to attach dimensions to a time series. A "
+            "Counter named llm_requests_total with labels {worker, status} lets you "
+            "query per-worker success rates with PromQL. Histograms record distributions "
+            "and support quantile queries (p50, p95, p99). Gauge metrics track current "
+            "values like active_tasks and are the most common type in this project."
+        ),
+    ),
 )
