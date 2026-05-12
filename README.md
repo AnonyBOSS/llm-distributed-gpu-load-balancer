@@ -21,7 +21,9 @@ Prometheus + Grafana observability, a pytest CI suite, and a benchmark
 harness that drives the full 100→1000 user ramp across all four LB
 strategies plus a fault-injection scenario. An interactive web dashboard provides real-time chat, live worker monitoring, benchmark execution, and fault injection.
 
-![Dashboard UI showing Chat and Worker Status](docs/assets/ui_dashboard.png)
+![Dashboard UI — Monitor tab showing LB, dual masters, and 4 workers with live load bars](docs/assets/ui_dashboard.png)
+
+![Dashboard UI — Chat tab showing a RAG-grounded LLM response routed through the cluster](docs/assets/ui_chat.png)
 
 The single-process simulation (`main.py`, `scripts/smoke_concurrent.py`)
 is preserved for fast local iteration and is what the unit tests target.
@@ -358,7 +360,7 @@ The fault-tolerance flow has four independent levers plus a master-level redunda
 
 1. **Hard worker failure (`mark_failed()`)** — operator-style failure. The next `process()` call raises immediately, so no work is wasted on a dead node, and the master scheduler drops the worker from the candidate pool. Trigger via the **Fault Lab** tab in the dashboard or directly via `/admin/worker/{id}/fail`.
 
-![Dashboard UI showing fault tolerance and LB strategy](docs/assets/ui_fault_tolerance.png)
+![Dashboard UI — Fault Lab tab showing Kill/Recover controls for masters and workers](docs/assets/ui_fault_tolerance.png)
 
 2. **Transient failure (`failure_rate`)** — probabilistic. Lets the test surface flaky behaviour where a worker sometimes errors but is otherwise healthy.
 3. **LLM failure** — the simulated backend can also be configured with a non-zero `failure_rate`, so an isolated inference error can be tested without making the whole worker bad.
@@ -387,6 +389,8 @@ Suggested metrics to record from the smoke output:
 - throughput (`requests / wall_time`)
 - distribution fairness across workers (`completed_tasks` per worker)
 - success rate after fault injection (`scheduler.successful_requests / total_requests`)
+
+![Dashboard UI — Benchmarks tab showing a completed load_aware run with RPS and per-worker distribution](docs/assets/ui_benchmarks.png)
 
 ## Notes on the Code Skeleton in the Brief
 
