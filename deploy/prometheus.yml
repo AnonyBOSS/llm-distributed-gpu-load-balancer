@@ -15,10 +15,11 @@ scrape_configs:
           - worker-3:8000
           - worker-4:8000
 
-  - job_name: master
+  - job_name: masters
     static_configs:
       - targets:
-          - master:9000
+          - master-1:9000
+          - master-2:9000
 
   - job_name: lb
     static_configs:

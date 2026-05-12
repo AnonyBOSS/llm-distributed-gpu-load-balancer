@@ -67,7 +67,7 @@ def test_prometheus_scrapes_all_targets():
         by_job.setdefault(t["labels"]["job"], []).append(t["health"])
     # All scrape jobs present and healthy.
     assert "lb" in by_job and all(h == "up" for h in by_job["lb"])
-    assert "master" in by_job and all(h == "up" for h in by_job["master"])
+    assert "masters" in by_job and all(h == "up" for h in by_job["masters"])
     assert "workers" in by_job and len(by_job["workers"]) == 3
     assert all(h == "up" for h in by_job["workers"])
 
@@ -106,7 +106,7 @@ def test_health_monitor_detects_killed_worker_and_recovers():
 
     def _list_master_view() -> dict[str, str]:
         proc = subprocess.run(
-            ["docker", "exec", "deploy-master-1", "curl", "-s", "http://localhost:9000/health"],
+            ["docker", "exec", "deploy-master-1-1", "curl", "-s", "http://localhost:9000/health"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -147,3 +147,51 @@ def test_health_monitor_detects_killed_worker_and_recovers():
             break
         time.sleep(1)
     assert _list_master_view().get("gpu-worker-2") == "healthy"
+
+
+def test_lb_retries_on_master_failure():
+    """Stop master-2, verify requests still succeed via master-1.
+    Restart master-2, verify both masters serve again."""
+
+    def _lb_master_statuses() -> dict[str, str]:
+        with httpx.Client(timeout=5.0) as c:
+            r = c.get(f"{LB_URL}/health")
+        r.raise_for_status()
+        body = r.json()
+        return {m["worker_id"]: m["status"] for m in body["monitor"]}
+
+    # Baseline: both masters healthy.
+    initial = _lb_master_statuses()
+    assert initial.get("master-1") == "healthy", initial
+    assert initial.get("master-2") == "healthy", initial
+
+    subprocess.run(["docker", "stop", "deploy-master-2-1"], check=True, capture_output=True)
+    try:
+        # LB HealthMonitor needs MONITOR_FAIL_THRESHOLD=3 bad probes (1s apart).
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if _lb_master_statuses().get("master-2") == "failed":
+                break
+            time.sleep(1)
+        assert _lb_master_statuses().get("master-2") == "failed"
+
+        # Requests must still succeed — LB retries on master-1.
+        with httpx.Client(timeout=30.0) as c:
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                statuses = list(
+                    pool.map(
+                        lambda i: _post(c, i + 2000),
+                        range(10),
+                    )
+                )
+        assert all(s == 200 for s in statuses), f"non-200 after master-2 stopped: {statuses}"
+    finally:
+        subprocess.run(["docker", "start", "deploy-master-2-1"], check=True, capture_output=True)
+
+    # master-2 recovers after MONITOR_RECOVER_THRESHOLD=3 ok probes.
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        if _lb_master_statuses().get("master-2") == "healthy":
+            break
+        time.sleep(1)
+    assert _lb_master_statuses().get("master-2") == "healthy"

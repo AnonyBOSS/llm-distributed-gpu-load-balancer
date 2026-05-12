@@ -180,6 +180,29 @@ def metrics():
     return metrics_bundle.handler()
 
 
+@app.get("/admin/masters")
+def get_masters() -> list[dict]:
+    return [p.snapshot_metrics() for p in master_proxies]
+
+
+@app.post("/admin/master/{master_id}/fail")
+def fail_master(master_id: str) -> dict[str, str]:
+    proxy = next((p for p in master_proxies if p.worker_id == master_id), None)
+    if proxy is None:
+        raise HTTPException(status_code=404, detail=f"master {master_id!r} not found")
+    proxy.mark_failed()
+    return {"status": "failed", "master_id": master_id}
+
+
+@app.post("/admin/master/{master_id}/recover")
+def recover_master(master_id: str) -> dict[str, str]:
+    proxy = next((p for p in master_proxies if p.worker_id == master_id), None)
+    if proxy is None:
+        raise HTTPException(status_code=404, detail=f"master {master_id!r} not found")
+    proxy.mark_healthy()
+    return {"status": "healthy", "master_id": master_id}
+
+
 @app.post("/request", response_model=ResponsePayload)
 def handle_request(payload: RequestPayload) -> ResponsePayload:
     if load_balancer is None:

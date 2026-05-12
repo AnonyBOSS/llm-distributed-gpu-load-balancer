@@ -44,7 +44,8 @@ make down                                     # tear down
 | <http://localhost:3000/d/cse354-overview> | Grafana dashboard (no login) |
 | <http://localhost:8080/> | Live Interactive Dashboard UI |
 | <http://localhost:9090/targets> | Prometheus scrape targets |
-| <http://localhost:9000/docs> | Master service auto-generated OpenAPI |
+| <http://localhost:9000/docs> | Master-1 service auto-generated OpenAPI |
+| <http://localhost:9001/docs> | Master-2 service auto-generated OpenAPI |
 | <http://localhost:7000/docs> | Load-balancer service OpenAPI |
 
 Benchmark variants:
@@ -88,17 +89,15 @@ For larger GPUs (24 GB+), promote the CPU workers to GPU too and bump `MAX_CONCU
 ### Topology
 
 ```
-client → nginx (8080) → lb (7000) → master (9000) → worker-{1,2,3,4} (8000)
-                                        │                   ▲
-                                        │  health probes    │
-                                        └───────────────────┘
+client → nginx (8080) → lb (7000) ──┬──→ master-1 (9000) ──┬──→ worker-{1,2,3,4} (8000)
+                                     └──→ master-2 (9001) ──┘
                             ↓
                    prometheus (9090) ──→ grafana (3000)
 ```
 
 - Four workers: 2 GPU (real Qwen bfloat16 on CUDA) + 2 CPU (real Qwen float32), each its own process with its own `LLMInferenceEngine`.
-- One master orchestrating RAG + worker selection + per-request retry.
-- One LB tier (extensible to N masters).
+- Two masters behind the LB, each running the full RAG + worker selection + per-request retry pipeline independently. Masters are stateless so they safely share all four workers.
+- LB-tier retry loop: on a `WorkerTransientError` from a master the LB picks the next available master and retries, exhausting up to `LB_MASTER_RETRIES + 1` attempts before returning 503.
 - One nginx upstream (matching the brief's "Load Balancing Tools: NGINX" requirement).
 - Prometheus scrapes every service every 5 s; Grafana auto-loads the dashboard.
 
@@ -353,9 +352,11 @@ This routes the LLM step through `transformers.pipeline("text-generation", model
 
 ## Fault-Tolerance Story
 
-The fault-tolerance flow has three independent levers and one final guardrail:
+The fault-tolerance flow has four independent levers plus a master-level redundancy layer:
 
-1. **Hard failure (`mark_failed()`)** — operator-style failure. The next `process()` call raises immediately, so no work is wasted on a dead node, and the load balancer drops the worker from the candidate pool. You can trigger this dynamically via the "Kill" and "Recover" buttons in the Live Dashboard UI.
+0. **LB-tier master retry** — when a master returns a transient error the LB picks the next master and retries the full request. Controlled by `LB_MASTER_RETRIES` (default 1). Two masters run in parallel; killing one still leaves the other fully operational. Admin endpoints `/admin/master/{id}/fail` and `/admin/master/{id}/recover` let you inject master failures from the Fault Lab UI.
+
+1. **Hard worker failure (`mark_failed()`)** — operator-style failure. The next `process()` call raises immediately, so no work is wasted on a dead node, and the master scheduler drops the worker from the candidate pool. Trigger via the **Fault Lab** tab in the dashboard or directly via `/admin/worker/{id}/fail`.
 
 ![Dashboard UI showing fault tolerance and LB strategy](docs/assets/ui_fault_tolerance.png)
 

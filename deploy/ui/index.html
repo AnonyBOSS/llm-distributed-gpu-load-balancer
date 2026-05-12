@@ -3,486 +3,986 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CSE354 — Distributed LLM Cluster Dashboard</title>
+<title>GPU Cluster Control · CSE354</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0e17;--surface:#111827;--surface2:#1e293b;--border:#334155;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--radius:12px}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
-a{color:var(--accent2);text-decoration:none;transition:color .2s}a:hover{color:#a5b4fc}
+:root{
+  --bg:#070a10;--bg2:#0d1117;--bg3:#161b26;--bg4:#1c2333;
+  --border:#252f42;--border2:#2d3a52;
+  --amber:#d97706;--amber2:#f59e0b;--amber3:#fbbf24;
+  --green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;
+  --text:#e8eaf0;--text2:#8b97b0;--text3:#4b5978;
+  --font:'Syne',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --r:6px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 
-/* Layout */
-.header{flex-shrink:0;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e1b4b 100%);padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.header h1{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,#c7d2fe,#818cf8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.header .subtitle{font-size:.8rem;color:var(--text2);margin-top:2px}
-.badge{display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.15);color:var(--green);padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:600}
-.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* Header */
+.hdr{flex-shrink:0;height:56px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:20px}
+.hdr-logo{font-size:1.05rem;font-weight:800;letter-spacing:-.5px;color:var(--amber2)}
+.hdr-sep{width:1px;height:24px;background:var(--border2)}
+.hdr-sub{font-size:.75rem;color:var(--text3);font-family:var(--mono)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.live-badge{display:flex;align-items:center;gap:7px;font-size:.7rem;font-family:var(--mono);font-weight:700;letter-spacing:.5px;color:var(--green);padding:5px 12px;border:1px solid rgba(34,197,94,.3);border-radius:3px;background:rgba(34,197,94,.06)}
+.live-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 6px var(--green)}50%{opacity:.5;box-shadow:none}}
+.hdr-clock{font-family:var(--mono);font-size:.7rem;color:var(--text3)}
 
-.main{flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 420px;gap:0}
+/* Tabs */
+.tabs{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;padding:0 24px;gap:2px}
+.tab{padding:12px 20px;font-size:.8rem;font-weight:700;letter-spacing:.3px;color:var(--text3);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:var(--font);transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--text2);border-bottom-color:var(--border2)}
+.tab.active{color:var(--amber2);border-bottom-color:var(--amber)}
 
-/* Chat Panel */
-.chat-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
-.chat-header{padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
-.chat-header h2{font-size:1rem;font-weight:600}
-.chat-header p{font-size:.75rem;color:var(--text2);margin-top:4px}
-.chat-messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
-.msg{max-width:85%;padding:12px 16px;border-radius:16px;font-size:.875rem;line-height:1.5;animation:fadeIn .3s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
-.msg.bot{align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-bottom-left-radius:4px}
-.msg .message-line{display:flex;align-items:flex-start;gap:8px}
-.msg .message-text{min-width:0;flex:1}
-.msg-icon{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;flex:0 0 1em;margin-top:.18em;color:inherit}
-.msg-icon svg{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.msg .meta{font-size:.7rem;color:var(--text3);margin-top:6px;display:flex;gap:12px}
-.msg.bot .meta{color:var(--text3)}
-.msg.user .meta{color:rgba(255,255,255,.6)}
-.msg .rag-context{font-size:.75rem;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-style:italic}
-.typing{align-self:flex-start;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:16px;border-bottom-left-radius:4px}
-.typing span{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text3);animation:bounce 1.4s infinite ease-in-out}
-.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+/* Panels */
+.panels{flex:1;overflow:hidden;position:relative}
+.panel{position:absolute;inset:0;display:none;overflow:hidden}
+.panel.active{display:flex}
+
+/* ===== CHAT ===== */
+#panChat{flex-direction:column}
+.chat-wrap{flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 320px}
+.chat-col{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+.chat-msgs{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:82%;padding:12px 16px;border-radius:var(--r);font-size:.855rem;line-height:1.6;animation:msgIn .2s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;background:var(--amber);color:#000;font-weight:600;border-bottom-right-radius:2px}
+.msg.bot{align-self:flex-start;background:var(--bg3);border:1px solid var(--border2);border-bottom-left-radius:2px}
+.msg .meta{font-size:.68rem;color:var(--text3);margin-top:7px;font-family:var(--mono)}
+.msg.user .meta{color:rgba(0,0,0,.5)}
+.msg .rag{font-size:.72rem;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-style:italic}
+.typing-ind{align-self:flex-start;padding:12px 16px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);border-bottom-left-radius:2px}
+.typing-ind span{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text3);animation:bounce 1.4s infinite ease-in-out}
+.typing-ind span:nth-child(2){animation-delay:.2s}.typing-ind span:nth-child(3){animation-delay:.4s}
 @keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+.chat-footer{flex-shrink:0;padding:14px 20px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:10px}
+.chat-footer input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:10px 14px;color:var(--text);font-family:var(--font);font-size:.855rem;outline:none;transition:border-color .15s}
+.chat-footer input:focus{border-color:var(--amber)}
+.chat-footer input::placeholder{color:var(--text3)}
+.chat-footer button{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:10px 20px;font-family:var(--font);font-weight:700;font-size:.8rem;cursor:pointer;transition:background .15s;letter-spacing:.3px}
+.chat-footer button:hover{background:var(--amber2)}
+.chat-footer button:disabled{opacity:.45;cursor:not-allowed}
 
-.chat-input{padding:16px 24px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:12px}
-.chat-input input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;color:var(--text);font-family:inherit;font-size:.875rem;outline:none;transition:border-color .2s}
-.chat-input input:focus{border-color:var(--accent)}
-.chat-input button{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-family:inherit;font-weight:600;font-size:.875rem;cursor:pointer;transition:all .2s}
-.chat-input button:hover{background:var(--accent2);transform:translateY(-1px)}
-.chat-input button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+/* Chat sidebar (mini monitor) */
+.chat-side{overflow-y:auto;background:var(--bg2);padding:16px}
+.cs-section{margin-bottom:20px}
+.cs-title{font-size:.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;font-family:var(--mono)}
+.cs-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cs-stat{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px}
+.cs-stat .val{font-family:var(--mono);font-size:1rem;font-weight:700;color:var(--amber2)}
+.cs-stat .lbl{font-size:.62rem;color:var(--text3);margin-top:2px;letter-spacing:.3px;text-transform:uppercase}
+.cs-workers{display:flex;flex-direction:column;gap:5px}
+.cs-worker{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;display:flex;align-items:center;gap:8px}
+.cs-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cs-dot.healthy{background:var(--green);box-shadow:0 0 5px var(--green)}
+.cs-dot.degraded{background:var(--yellow);box-shadow:0 0 5px var(--yellow)}
+.cs-dot.failed{background:var(--red);box-shadow:0 0 5px var(--red)}
+.cs-worker .wname{font-family:var(--mono);font-size:.72rem;font-weight:500;flex:1}
+.cs-worker .wtasks{font-family:var(--mono);font-size:.65rem;color:var(--text3)}
+.cs-strat-picker{display:flex;flex-direction:column;gap:5px}
+.strat-btn{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;font-family:var(--font);font-size:.72rem;font-weight:600;color:var(--text2);cursor:pointer;text-align:left;transition:all .15s;width:100%}
+.strat-btn:hover{border-color:var(--amber);color:var(--amber2)}
+.strat-btn.active-strat{border-color:var(--amber);background:rgba(217,119,6,.1);color:var(--amber2)}
 
-/* Sidebar */
-.sidebar{overflow-y:auto;background:var(--surface);display:flex;flex-direction:column;gap:0}
-.section{padding:16px 20px;border-bottom:1px solid var(--border)}
-.section h3{font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.section h3 svg,.btn svg,.link-item svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+/* ===== MONITOR ===== */
+#panMonitor{flex-direction:column;overflow-y:auto;padding:20px 24px;gap:16px;background:var(--bg)}
+.mon-section-title{font-size:.65rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.mon-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.mon-row{display:flex;gap:12px}
+.mon-card{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden;transition:border-color .3s}
+.mon-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+.mon-card.healthy::before{background:var(--green);box-shadow:2px 0 8px var(--green)}
+.mon-card.degraded::before{background:var(--yellow)}
+.mon-card.failed::before{background:var(--red);box-shadow:2px 0 8px var(--red)}
+.mon-card.unknown::before{background:var(--border2)}
+.mon-card.healthy{border-color:rgba(34,197,94,.25)}
+.mon-card.failed{border-color:rgba(239,68,68,.25)}
+.mon-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.mon-card-name{font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--text)}
+.mon-card-badge{font-family:var(--mono);font-size:.6rem;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:3px}
+.mon-card-badge.healthy{background:rgba(34,197,94,.12);color:var(--green)}
+.mon-card-badge.degraded{background:rgba(234,179,8,.12);color:var(--yellow)}
+.mon-card-badge.failed{background:rgba(239,68,68,.12);color:var(--red)}
+.mon-card-badge.unknown{background:rgba(75,89,120,.12);color:var(--text3)}
+.mon-card-meta{font-family:var(--mono);font-size:.7rem;color:var(--text3);line-height:1.8}
+.mon-card-meta span{color:var(--text2)}
+.mon-bar-wrap{margin-top:8px}
+.mon-bar-label{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.62rem;color:var(--text3);margin-bottom:4px}
+.mon-bar{height:5px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.mon-bar-fill{height:100%;border-radius:2px;transition:width .5s}
+.mon-bar-fill.green{background:linear-gradient(90deg,var(--green),#4ade80)}
+.mon-bar-fill.yellow{background:linear-gradient(90deg,var(--yellow),#fde047)}
+.mon-bar-fill.red{background:linear-gradient(90deg,var(--red),#f87171)}
+.mon-lb-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;gap:24px;border-left:3px solid var(--amber);margin-bottom:4px}
+.mon-lb-icon{width:36px;height:36px;border-radius:var(--r);background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mon-lb-icon svg{width:18px;height:18px;stroke:var(--amber2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mon-lb-info{flex:1}
+.mon-lb-name{font-family:var(--mono);font-weight:700;font-size:.9rem;color:var(--amber2)}
+.mon-lb-meta{font-family:var(--mono);font-size:.68rem;color:var(--text3);margin-top:3px}
+.mon-lb-stats{display:flex;gap:20px}
+.mon-lb-stat{text-align:right}
+.mon-lb-stat .v{font-family:var(--mono);font-size:1.1rem;font-weight:700;color:var(--text)}
+.mon-lb-stat .l{font-family:var(--mono);font-size:.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.mon-topo{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;font-family:var(--mono);font-size:.72rem;color:var(--text2);line-height:2;text-align:center}
+.mon-topo .hi{color:var(--amber2);font-weight:700}
+.mon-topo .hi2{color:var(--blue)}
+.mon-topo .hi3{color:var(--green)}
 
-/* Worker Cards */
-.workers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.worker-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;transition:border-color .3s;position:relative}
-.worker-card .worker-header{display:flex;justify-content:space-between;align-items:flex-start}
-.worker-card.healthy{border-left:3px solid var(--green)}
-.worker-card.degraded{border-left:3px solid var(--yellow)}
-.worker-card.failed{border-left:3px solid var(--red)}
-.worker-card .name{font-size:.75rem;font-weight:600}
-.worker-card .device{font-size:.65rem;color:var(--text3);margin-top:2px}
-.worker-card .status-badge{font-size:.6rem;font-weight:700;text-transform:uppercase;margin-top:4px;padding:2px 6px;border-radius:4px;display:inline-block}
-.worker-card.healthy .status-badge{background:rgba(34,197,94,.15);color:var(--green)}
-.worker-card.degraded .status-badge{background:rgba(234,179,8,.15);color:var(--yellow)}
-.worker-card.failed .status-badge{background:rgba(239,68,68,.15);color:var(--red)}
-.worker-card .tasks{font-size:.65rem;color:var(--text2);margin-top:4px}
-.fault-btn{background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:4px;padding:2px 6px;font-size:.65rem;cursor:pointer;transition:all .2s;}
-.fault-btn:hover{color:var(--text);border-color:var(--text);}
-.fault-btn.kill:hover{color:var(--red);border-color:var(--red);background:rgba(239,68,68,.1);}
-.fault-btn.recover:hover{color:var(--green);border-color:var(--green);background:rgba(34,197,94,.1);}
+/* ===== BENCHMARKS ===== */
+#panBench{flex-direction:column;overflow-y:auto;padding:20px 24px;gap:16px}
+.bench-config{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px 24px;display:flex;gap:24px;align-items:flex-end}
+.bench-field{display:flex;flex-direction:column;gap:6px}
+.bench-label{font-size:.65rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3);font-family:var(--mono)}
+.bench-select,.bench-input-num{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:9px 12px;color:var(--text);font-family:var(--mono);font-size:.82rem;outline:none;transition:border-color .15s;cursor:pointer}
+.bench-select:focus,.bench-input-num:focus{border-color:var(--amber)}
+.bench-input-num{width:110px}
+.bench-run-btn{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:10px 24px;font-family:var(--font);font-weight:700;font-size:.855rem;cursor:pointer;letter-spacing:.3px;transition:background .15s;white-space:nowrap}
+.bench-run-btn:hover{background:var(--amber2)}
+.bench-run-btn:disabled{opacity:.45;cursor:not-allowed}
+.bench-run-btn.running-st{background:var(--yellow);animation:btnPulse 1.5s infinite}
+@keyframes btnPulse{0%,100%{opacity:1}50%{opacity:.6}}
+.bench-stop-btn{background:var(--bg3);color:var(--red);border:1px solid var(--red);border-radius:var(--r);padding:10px 20px;font-family:var(--font);font-weight:700;font-size:.8rem;cursor:pointer;letter-spacing:.3px;transition:all .15s;margin-left:auto}
+.bench-stop-btn:hover{background:rgba(239,68,68,.1)}
+.bench-progress-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px 24px;display:none}
+.bench-progress-box.show{display:block}
+.bench-prog-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.bench-prog-title{font-family:var(--mono);font-size:.82rem;font-weight:700}
+.bench-prog-pct{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--amber2)}
+.bench-big-bar{height:10px;background:var(--bg4);border-radius:5px;overflow:hidden;margin-bottom:10px}
+.bench-big-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--amber),var(--amber2));transition:width .3s}
+.bench-prog-stats{display:flex;gap:24px}
+.bench-prog-stat{font-family:var(--mono);font-size:.75rem;color:var(--text3)}
+.bench-prog-stat span{color:var(--text2);font-weight:700}
+.bench-results-history{display:flex;flex-direction:column;gap:8px}
+.bench-result-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px}
+.bench-result-card.ok-card{border-left:3px solid var(--green)}
+.bench-result-card.err-card{border-left:3px solid var(--red)}
+.bench-result-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.bench-result-name{font-family:var(--mono);font-size:.8rem;font-weight:700}
+.bench-result-time{font-family:var(--mono);font-size:.68rem;color:var(--text3)}
+.bench-result-metrics{display:flex;gap:20px}
+.bench-metric{font-family:var(--mono);font-size:.72rem;color:var(--text3)}
+.bench-metric span{color:var(--text2)}
+.bench-dist{font-family:var(--mono);font-size:.68rem;color:var(--text3);margin-top:6px}
+.bench-hist-title{font-size:.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.bench-hist-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.bench-empty{font-family:var(--mono);font-size:.78rem;color:var(--text3);padding:20px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);border-style:dashed}
 
-/* Stats */
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.stat{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center}
-.stat .value{font-size:1.2rem;font-weight:700;color:var(--accent2)}
-.stat .label{font-size:.65rem;color:var(--text3);margin-top:2px;text-transform:uppercase}
+/* ===== FAULT LAB ===== */
+#panFault{flex-direction:column;overflow-y:auto;padding:20px 24px;gap:16px}
+.fault-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fault-entity{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;position:relative;transition:border-color .3s}
+.fault-entity::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:var(--r) 0 0 var(--r)}
+.fault-entity.healthy::before{background:var(--green)}
+.fault-entity.degraded::before{background:var(--yellow)}
+.fault-entity.failed::before{background:var(--red)}
+.fault-entity.unknown::before{background:var(--border2)}
+.fault-entity.healthy{border-color:rgba(34,197,94,.2)}
+.fault-entity.failed{border-color:rgba(239,68,68,.2)}
+.fault-ent-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.fault-ent-name{font-family:var(--mono);font-weight:700;font-size:.88rem}
+.fault-ent-type{font-size:.65rem;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.fault-status-pill{font-family:var(--mono);font-size:.6rem;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:3px}
+.fault-status-pill.healthy{background:rgba(34,197,94,.12);color:var(--green)}
+.fault-status-pill.degraded{background:rgba(234,179,8,.12);color:var(--yellow)}
+.fault-status-pill.failed{background:rgba(239,68,68,.12);color:var(--red)}
+.fault-status-pill.unknown{background:rgba(75,89,120,.12);color:var(--text3)}
+.fault-ent-meta{font-family:var(--mono);font-size:.68rem;color:var(--text3);line-height:1.8;margin-bottom:12px}
+.fault-ent-meta span{color:var(--text2)}
+.fault-btns{display:flex;gap:8px}
+.fault-kill-btn,.fault-recover-btn{flex:1;padding:8px 12px;border-radius:var(--r);font-family:var(--font);font-size:.75rem;font-weight:700;cursor:pointer;transition:all .15s;border:1px solid;letter-spacing:.3px}
+.fault-kill-btn{background:rgba(239,68,68,.08);color:var(--red);border-color:rgba(239,68,68,.3)}
+.fault-kill-btn:hover{background:rgba(239,68,68,.18);border-color:var(--red)}
+.fault-kill-btn:disabled{opacity:.35;cursor:not-allowed}
+.fault-recover-btn{background:rgba(34,197,94,.08);color:var(--green);border-color:rgba(34,197,94,.3)}
+.fault-recover-btn:hover{background:rgba(34,197,94,.18);border-color:var(--green)}
+.fault-recover-btn:disabled{opacity:.35;cursor:not-allowed}
+.fault-log{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:6px;min-height:120px;max-height:220px;overflow-y:auto}
+.fault-log-entry{font-family:var(--mono);font-size:.7rem;line-height:1.5;padding:4px 8px;border-radius:3px;background:var(--bg3)}
+.fault-log-entry.kill{border-left:2px solid var(--red);color:var(--red)}
+.fault-log-entry.recover{border-left:2px solid var(--green);color:var(--green)}
+.fault-log-entry.info{border-left:2px solid var(--text3);color:var(--text3)}
+.fault-log-time{color:var(--text3);margin-right:8px}
+.fault-log-empty{font-family:var(--mono);font-size:.72rem;color:var(--text3);text-align:center;padding:20px}
 
-/* Buttons */
-.actions{display:flex;flex-direction:column;gap:8px}
-.btn{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;font-size:.8rem;cursor:pointer;transition:all .2s;text-align:left;width:100%}
-.btn:hover{border-color:var(--accent);background:rgba(99,102,241,.08);transform:translateX(2px)}
-.btn .icon{width:24px;display:flex;align-items:center;justify-content:center}
-.btn .label{font-weight:500}
-.btn .desc{font-size:.65rem;color:var(--text3)}
-.btn.running{border-color:var(--yellow);animation:borderPulse 2s infinite}
-@keyframes borderPulse{0%,100%{border-color:var(--yellow)}50%{border-color:transparent}}
-.btn.success{border-color:var(--green);background:rgba(34,197,94,.08)}
-.btn.error{border-color:var(--red);background:rgba(239,68,68,.08)}
+/* ===== LINKS ===== */
+#panLinks{flex-direction:column;overflow-y:auto;padding:24px;gap:20px}
+.links-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.link-card{display:block;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;text-decoration:none;transition:all .2s;position:relative;overflow:hidden}
+.link-card::after{content:'↗';position:absolute;top:14px;right:16px;font-size:1rem;color:var(--text3);transition:all .2s}
+.link-card:hover{border-color:var(--amber);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.link-card:hover::after{color:var(--amber2);transform:translate(2px,-2px)}
+.link-card-icon{width:40px;height:40px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.link-card-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.link-card-name{font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:4px}
+.link-card-url{font-family:var(--mono);font-size:.68rem;color:var(--text3);margin-bottom:8px}
+.link-card-desc{font-size:.75rem;color:var(--text2);line-height:1.5}
+.link-cat-title{font-size:.65rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);display:flex;align-items:center;gap:10px}
+.link-cat-title::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* Benchmark progress */
-.bench-progress{margin-top:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:none}
-.bench-progress.active{display:block}
-.bench-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:6px}
-.bench-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:3px;transition:width .3s;width:0%}
-.bench-stats{font-size:.7rem;color:var(--text2);display:flex;justify-content:space-between;margin-top:4px}
-.bench-result{font-size:.75rem;color:var(--text);margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;line-height:1.5}
-.bench-summary{display:flex;align-items:flex-start;gap:8px}
-.bench-summary-text{min-width:0;flex:1}
-
-/* Links */
-.links{display:flex;flex-direction:column;gap:6px}
-.link-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;transition:background .2s;font-size:.8rem}
-.link-item:hover{background:rgba(99,102,241,.08)}
-.link-item .icon{width:24px;display:flex;align-items:center;justify-content:center}
-.link-item .url{font-size:.65rem;color:var(--text3)}
-
-/* Topology */
-.topology{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:.7rem;color:var(--text2);line-height:1.6;text-align:center}
-.topology .highlight{color:var(--accent2);font-weight:600}
-
-/* Scrollbar */
-::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+/* Shared */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+.section-hd{font-size:.65rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.section-hd::after{content:'';flex:1;height:1px;background:var(--border)}
 </style>
 </head>
 <body>
-<div class="header">
-  <div>
-    <h1>CSE354 — Distributed LLM Cluster</h1>
-    <div class="subtitle">Qwen/Qwen2.5-0.5B-Instruct • 2 GPU + 2 CPU Workers • Real-Time RAG</div>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-logo">GPU CLUSTER CONTROL</div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-sub">CSE354 · Distributed LLM Load Balancer · nginx:8080</div>
+  <div class="hdr-right">
+    <div class="hdr-clock" id="clock">--:--:--</div>
+    <div class="live-badge"><span class="dot"></span> LIVE</div>
   </div>
-  <div class="badge"><span class="dot"></span> Cluster Online</div>
 </div>
 
-<div class="main">
-  <!-- Chat Panel -->
-  <div class="chat-panel">
-    <div class="chat-header">
-      <h2>Chat with Qwen LLM</h2>
-      <p>Your messages are processed through the full pipeline: nginx → LB → master (RAG) → worker (GPU/CPU)</p>
-    </div>
-    <div class="chat-messages" id="chatMessages">
-      <div class="msg bot">
-        <div>Hi! I'm <strong>Qwen</strong>, running on a distributed GPU cluster. Ask me anything — my responses are grounded in a <strong>growing RAG knowledge base</strong> covering distributed systems, ML/AI, Docker, CUDA, and more.</div>
-        <div class="meta"><span>System</span></div>
-      </div>
-    </div>
-    <div class="chat-input">
-      <input type="text" id="chatInput" placeholder="Ask a question... (e.g. What is load balancing?)" autocomplete="off">
-      <button id="sendBtn" onclick="sendMessage()">Send</button>
-    </div>
-  </div>
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('Chat',this)">Chat</button>
+  <button class="tab" onclick="switchTab('Monitor',this)">Monitor</button>
+  <button class="tab" onclick="switchTab('Bench',this)">Benchmarks</button>
+  <button class="tab" onclick="switchTab('Fault',this)">Fault Lab</button>
+  <button class="tab" onclick="switchTab('Links',this)">Links</button>
+</div>
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <!-- Worker Status -->
-    <div class="section">
-      <h3><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Worker Status</h3>
-      <div class="workers" id="workerGrid">
-        <div class="worker-card healthy" id="w1"><div class="worker-header"><div><div class="name">worker-1</div><div class="device">GPU (CUDA)</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-1', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-        <div class="worker-card healthy" id="w2"><div class="worker-header"><div><div class="name">worker-2</div><div class="device">GPU (CUDA)</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-2', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-        <div class="worker-card healthy" id="w3"><div class="worker-header"><div><div class="name">worker-3</div><div class="device">CPU</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-3', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-        <div class="worker-card healthy" id="w4"><div class="worker-header"><div><div class="name">worker-4</div><div class="device">CPU</div></div><button class="fault-btn kill" onclick="toggleFault('gpu-worker-4', 'fail')">Kill</button></div><div class="status-badge">Loading...</div><div class="tasks">—</div></div>
-      </div>
-    </div>
+<!-- Panels -->
+<div class="panels">
 
-    <!-- Live Stats -->
-    <div class="section">
-      <h3><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Session Stats</h3>
-      <div class="stats">
-        <div class="stat"><div class="value" id="statMessages">0</div><div class="label">Messages</div></div>
-        <div class="stat"><div class="value" id="statAvgLatency">—</div><div class="label">Avg Latency</div></div>
-        <div class="stat"><div class="value" id="statStrategy">—</div><div class="label">LB Strategy</div></div>
-        <div class="stat"><div class="value" id="statGpuFree">—</div><div class="label">GPU Free</div></div>
-      </div>
-    </div>
-
-    <!-- Topology -->
-    <div class="section">
-      <h3><svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Cluster Topology</h3>
-      <div class="topology">
-        <span class="highlight">client</span> → nginx:8080 → lb:7000<br>
-        → <span class="highlight">master:9000</span> (RAG + routing)<br>
-        → worker-1 <span class="highlight">[GPU]</span><br>
-        → worker-2 <span class="highlight">[GPU]</span><br>
-        → worker-3 <span class="highlight">[CPU]</span><br>
-        → worker-4 <span class="highlight">[CPU]</span>
-      </div>
-    </div>
-
-    <!-- Quick Links -->
-    <div class="section">
-      <h3><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Quick Links</h3>
-      <div class="links">
-        <a href="http://localhost:3000/d/cse354-overview" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><div><div>Grafana Dashboard</div><div class="url">localhost:3000</div></div></a>
-        <a href="http://localhost:9090/targets" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><div><div>Prometheus Targets</div><div class="url">localhost:9090</div></div></a>
-        <a href="http://localhost:9000/docs" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><div><div>Master API Docs</div><div class="url">localhost:9000/docs</div></div></a>
-        <a href="http://localhost:7000/docs" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span><div><div>Load Balancer API Docs</div><div class="url">localhost:7000/docs</div></div></a>
-        <a href="http://localhost:9000/workers" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><div>Worker Registry</div><div class="url">localhost:9000/workers</div></div></a>
-        <a href="http://localhost:9000/metrics" target="_blank" class="link-item"><span class="icon"><svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span><div><div>Raw Prometheus Metrics</div><div class="url">localhost:9000/metrics</div></div></a>
-      </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="section">
-      <h3><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Quick Actions</h3>
-      <div class="actions">
-        <button class="btn" id="benchBtn" onclick="runBenchmark(100)"><span class="icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span><div><div class="label">Run 100 Users Load Test</div><div class="desc">Fire 100 concurrent requests through the cluster</div></div></button>
-        <button class="btn" id="benchBtn1k" onclick="runBenchmark(1000)"><span class="icon"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg></span><div><div class="label">Run 1000 Users Load Test</div><div class="desc">Stress test: 1000 concurrent requests</div></div></button>
-        <div class="bench-progress" id="benchProgress">
-          <div style="font-size:.75rem;font-weight:600" id="benchTitle">Running benchmark...</div>
-          <div class="bench-bar"><div class="bench-bar-fill" id="benchBarFill"></div></div>
-          <div class="bench-stats"><span id="benchCount">0 / 100</span><span id="benchTime">0s</span></div>
-          <div class="bench-result" id="benchResult" style="display:none"></div>
+  <!-- ===== CHAT ===== -->
+  <div class="panel active" id="panChat">
+    <div class="chat-wrap">
+      <div class="chat-col">
+        <div class="chat-msgs" id="chatMsgs">
+          <div class="msg bot">
+            <div>Hi! I'm running on your distributed GPU cluster. Ask me anything — requests flow through <strong>nginx → LB → master (RAG) → worker</strong>.</div>
+            <div class="meta">System · Ready</div>
+          </div>
         </div>
-        <button class="btn" onclick="switchStrategy('round_robin')"><span class="icon"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span><div><div class="label">Round Robin</div><div class="desc">Switch LB strategy</div></div></button>
-        <button class="btn" onclick="switchStrategy('least_connections')"><span class="icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><div><div class="label">Least Connections</div><div class="desc">Switch LB strategy</div></div></button>
-        <button class="btn" onclick="switchStrategy('power_of_two')"><span class="icon"><svg viewBox="0 0 24 24"><path d="M16 4h4v4"/><path d="M4 20L20 4"/><path d="M4 14l6-6"/><path d="M14 4l-4 4"/></svg></span><div><div class="label">Power of Two</div><div class="desc">Switch LB strategy</div></div></button>
-        <button class="btn" onclick="switchStrategy('load_aware')"><span class="icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><div><div class="label">Load Aware</div><div class="desc">Switch LB strategy (recommended)</div></div></button>
+        <div class="chat-footer">
+          <input type="text" id="chatInput" placeholder="Ask something... (Enter to send)" autocomplete="off">
+          <button id="sendBtn" onclick="sendChat()">Send</button>
+        </div>
+      </div>
+      <div class="chat-side">
+        <div class="cs-section">
+          <div class="cs-title">Session Stats</div>
+          <div class="cs-stat-grid">
+            <div class="cs-stat"><div class="val" id="csMessages">0</div><div class="lbl">Messages</div></div>
+            <div class="cs-stat"><div class="val" id="csLatency">—</div><div class="lbl">Avg Latency</div></div>
+            <div class="cs-stat"><div class="val" id="csStrategy">—</div><div class="lbl">Strategy</div></div>
+            <div class="cs-stat"><div class="val" id="csWorkers">—</div><div class="lbl">Live Workers</div></div>
+          </div>
+        </div>
+        <div class="cs-section">
+          <div class="cs-title">Worker Status</div>
+          <div class="cs-workers" id="csWorkerList">
+            <div class="cs-worker"><span class="cs-dot unknown"></span><span class="wname">Loading…</span></div>
+          </div>
+        </div>
+        <div class="cs-section">
+          <div class="cs-title">Switch Strategy</div>
+          <div class="cs-strat-picker">
+            <button class="strat-btn" onclick="switchStrategy('round_robin',this)">Round Robin</button>
+            <button class="strat-btn" onclick="switchStrategy('least_connections',this)">Least Connections</button>
+            <button class="strat-btn" onclick="switchStrategy('power_of_two',this)">Power of Two</button>
+            <button class="strat-btn" onclick="switchStrategy('load_aware',this)">Load Aware</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-</div>
+
+  <!-- ===== MONITOR ===== -->
+  <div class="panel" id="panMonitor">
+    <!-- LB Row -->
+    <div style="width:100%">
+      <div class="mon-section-title">Load Balancer</div>
+      <div class="mon-lb-card" id="monLbCard">
+        <div class="mon-lb-icon">
+          <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </div>
+        <div class="mon-lb-info">
+          <div class="mon-lb-name">lb:7000</div>
+          <div class="mon-lb-meta" id="monLbMeta">strategy: — · retries: 1 · masters: 2</div>
+        </div>
+        <div class="mon-lb-stats">
+          <div class="mon-lb-stat"><div class="v" id="monLbStatus">—</div><div class="l">Status</div></div>
+          <div class="mon-lb-stat"><div class="v" id="monMasterCount">—</div><div class="l">Masters</div></div>
+        </div>
+      </div>
+
+      <!-- Masters Row -->
+      <div class="mon-section-title" style="margin-top:14px">Masters</div>
+      <div class="mon-row" id="monMastersRow">
+        <div class="mon-card unknown" id="monM1">
+          <div class="mon-card-top"><span class="mon-card-name">master-1</span><span class="mon-card-badge unknown" id="monM1Badge">LOADING</span></div>
+          <div class="mon-card-meta" id="monM1Meta">port: 9000 · workers: 4</div>
+        </div>
+        <div class="mon-card unknown" id="monM2">
+          <div class="mon-card-top"><span class="mon-card-name">master-2</span><span class="mon-card-badge unknown" id="monM2Badge">LOADING</span></div>
+          <div class="mon-card-meta" id="monM2Meta">port: 9001 · workers: 4</div>
+        </div>
+      </div>
+
+      <!-- Workers Row -->
+      <div class="mon-section-title" style="margin-top:14px">Workers</div>
+      <div class="mon-row" id="monWorkersRow">
+        <div class="mon-card unknown" id="monW1">
+          <div class="mon-card-top"><span class="mon-card-name">gpu-worker-1</span><span class="mon-card-badge unknown" id="monW1Badge">—</span></div>
+          <div class="mon-card-meta" id="monW1Meta">active: — · pending: —</div>
+          <div class="mon-bar-wrap"><div class="mon-bar-label"><span>Load</span><span id="monW1Pct">—</span></div><div class="mon-bar"><div class="mon-bar-fill green" id="monW1Bar" style="width:0%"></div></div></div>
+        </div>
+        <div class="mon-card unknown" id="monW2">
+          <div class="mon-card-top"><span class="mon-card-name">gpu-worker-2</span><span class="mon-card-badge unknown" id="monW2Badge">—</span></div>
+          <div class="mon-card-meta" id="monW2Meta">active: — · pending: —</div>
+          <div class="mon-bar-wrap"><div class="mon-bar-label"><span>Load</span><span id="monW2Pct">—</span></div><div class="mon-bar"><div class="mon-bar-fill green" id="monW2Bar" style="width:0%"></div></div></div>
+        </div>
+        <div class="mon-card unknown" id="monW3">
+          <div class="mon-card-top"><span class="mon-card-name">gpu-worker-3</span><span class="mon-card-badge unknown" id="monW3Badge">—</span></div>
+          <div class="mon-card-meta" id="monW3Meta">active: — · pending: —</div>
+          <div class="mon-bar-wrap"><div class="mon-bar-label"><span>Load</span><span id="monW3Pct">—</span></div><div class="mon-bar"><div class="mon-bar-fill green" id="monW3Bar" style="width:0%"></div></div></div>
+        </div>
+        <div class="mon-card unknown" id="monW4">
+          <div class="mon-card-top"><span class="mon-card-name">gpu-worker-4</span><span class="mon-card-badge unknown" id="monW4Badge">—</span></div>
+          <div class="mon-card-meta" id="monW4Meta">active: — · pending: —</div>
+          <div class="mon-bar-wrap"><div class="mon-bar-label"><span>Load</span><span id="monW4Pct">—</span></div><div class="mon-bar"><div class="mon-bar-fill green" id="monW4Bar" style="width:0%"></div></div></div>
+        </div>
+      </div>
+
+      <!-- Topology -->
+      <div class="mon-section-title" style="margin-top:14px">Topology</div>
+      <div class="mon-topo">
+        <span class="hi">client</span> → <span class="hi2">nginx :8080</span> → <span class="hi">lb :7000</span><br>
+        ↙&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘<br>
+        <span class="hi2">master-1 :9000</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hi2">master-2 :9001</span><br>
+        ↘&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↙<br>
+        <span class="hi3">worker-1</span> · <span class="hi3">worker-2</span> · <span class="hi3">worker-3</span> · <span class="hi3">worker-4</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== BENCHMARKS ===== -->
+  <div class="panel" id="panBench">
+    <div style="width:100%">
+      <div class="bench-config">
+        <div class="bench-field">
+          <div class="bench-label">Worker Strategy</div>
+          <select class="bench-select" id="benchStrategy">
+            <option value="load_aware">Load Aware (recommended)</option>
+            <option value="round_robin">Round Robin</option>
+            <option value="least_connections">Least Connections</option>
+            <option value="power_of_two">Power of Two</option>
+          </select>
+        </div>
+        <div class="bench-field">
+          <div class="bench-label">Concurrent Users</div>
+          <input type="number" class="bench-input-num" id="benchUsers" value="100" min="1" max="5000">
+        </div>
+        <div class="bench-field">
+          <div class="bench-label">Concurrency</div>
+          <input type="number" class="bench-input-num" id="benchConcurrency" value="10" min="1" max="100">
+        </div>
+        <button class="bench-run-btn" id="benchRunBtn" onclick="startBenchmark()">Run Benchmark</button>
+        <button class="bench-stop-btn" id="benchStopBtn" onclick="stopBenchmark()" style="display:none">Stop</button>
+      </div>
+
+      <div class="bench-progress-box" id="benchProgressBox">
+        <div class="bench-prog-header">
+          <div class="bench-prog-title" id="benchProgTitle">Running…</div>
+          <div class="bench-prog-pct" id="benchProgPct">0%</div>
+        </div>
+        <div class="bench-big-bar"><div class="bench-big-fill" id="benchBigFill" style="width:0%"></div></div>
+        <div class="bench-prog-stats">
+          <div class="bench-prog-stat">Done: <span id="benchDone">0</span></div>
+          <div class="bench-prog-stat">OK: <span id="benchOk">0</span></div>
+          <div class="bench-prog-stat">Errors: <span id="benchErr">0</span></div>
+          <div class="bench-prog-stat">RPS: <span id="benchRps">—</span></div>
+          <div class="bench-prog-stat">Elapsed: <span id="benchElapsed">0s</span></div>
+        </div>
+      </div>
+
+      <div class="bench-hist-title" id="benchHistTitle" style="margin-top:4px;display:none">Results</div>
+      <div class="bench-results-history" id="benchHistory"></div>
+      <div class="bench-empty" id="benchEmptyMsg">Configure and run a benchmark above. Results appear here.</div>
+    </div>
+  </div>
+
+  <!-- ===== FAULT LAB ===== -->
+  <div class="panel" id="panFault">
+    <div style="width:100%">
+      <div class="section-hd">Masters</div>
+      <div class="fault-grid" id="faultMastersGrid">
+        <div class="fault-entity unknown" id="faultM1">
+          <div class="fault-ent-top">
+            <div><div class="fault-ent-name">master-1</div><div class="fault-ent-type">MASTER · port 9000</div></div>
+            <span class="fault-status-pill unknown" id="faultM1Pill">LOADING</span>
+          </div>
+          <div class="fault-ent-meta" id="faultM1Meta">Connecting…</div>
+          <div class="fault-btns">
+            <button class="fault-kill-btn" id="faultM1Kill" onclick="faultAction('master','master-1','fail')">Kill Master</button>
+            <button class="fault-recover-btn" id="faultM1Rec" onclick="faultAction('master','master-1','recover')">Recover</button>
+          </div>
+        </div>
+        <div class="fault-entity unknown" id="faultM2">
+          <div class="fault-ent-top">
+            <div><div class="fault-ent-name">master-2</div><div class="fault-ent-type">MASTER · port 9001</div></div>
+            <span class="fault-status-pill unknown" id="faultM2Pill">LOADING</span>
+          </div>
+          <div class="fault-ent-meta" id="faultM2Meta">Connecting…</div>
+          <div class="fault-btns">
+            <button class="fault-kill-btn" id="faultM2Kill" onclick="faultAction('master','master-2','fail')">Kill Master</button>
+            <button class="fault-recover-btn" id="faultM2Rec" onclick="faultAction('master','master-2','recover')">Recover</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-hd" style="margin-top:20px">Workers</div>
+      <div class="fault-grid" id="faultWorkersGrid">
+        <div class="fault-entity unknown" id="faultW1">
+          <div class="fault-ent-top">
+            <div><div class="fault-ent-name">gpu-worker-1</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <span class="fault-status-pill unknown" id="faultW1Pill">LOADING</span>
+          </div>
+          <div class="fault-ent-meta" id="faultW1Meta">Connecting…</div>
+          <div class="fault-btns">
+            <button class="fault-kill-btn" id="faultW1Kill" onclick="faultAction('worker','gpu-worker-1','fail')">Kill Worker</button>
+            <button class="fault-recover-btn" id="faultW1Rec" onclick="faultAction('worker','gpu-worker-1','recover')">Recover</button>
+          </div>
+        </div>
+        <div class="fault-entity unknown" id="faultW2">
+          <div class="fault-ent-top">
+            <div><div class="fault-ent-name">gpu-worker-2</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <span class="fault-status-pill unknown" id="faultW2Pill">LOADING</span>
+          </div>
+          <div class="fault-ent-meta" id="faultW2Meta">Connecting…</div>
+          <div class="fault-btns">
+            <button class="fault-kill-btn" id="faultW2Kill" onclick="faultAction('worker','gpu-worker-2','fail')">Kill Worker</button>
+            <button class="fault-recover-btn" id="faultW2Rec" onclick="faultAction('worker','gpu-worker-2','recover')">Recover</button>
+          </div>
+        </div>
+        <div class="fault-entity unknown" id="faultW3">
+          <div class="fault-ent-top">
+            <div><div class="fault-ent-name">gpu-worker-3</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <span class="fault-status-pill unknown" id="faultW3Pill">LOADING</span>
+          </div>
+          <div class="fault-ent-meta" id="faultW3Meta">Connecting…</div>
+          <div class="fault-btns">
+            <button class="fault-kill-btn" id="faultW3Kill" onclick="faultAction('worker','gpu-worker-3','fail')">Kill Worker</button>
+            <button class="fault-recover-btn" id="faultW3Rec" onclick="faultAction('worker','gpu-worker-3','recover')">Recover</button>
+          </div>
+        </div>
+        <div class="fault-entity unknown" id="faultW4">
+          <div class="fault-ent-top">
+            <div><div class="fault-ent-name">gpu-worker-4</div><div class="fault-ent-type">WORKER · GPU (SIM)</div></div>
+            <span class="fault-status-pill unknown" id="faultW4Pill">LOADING</span>
+          </div>
+          <div class="fault-ent-meta" id="faultW4Meta">Connecting…</div>
+          <div class="fault-btns">
+            <button class="fault-kill-btn" id="faultW4Kill" onclick="faultAction('worker','gpu-worker-4','fail')">Kill Worker</button>
+            <button class="fault-recover-btn" id="faultW4Rec" onclick="faultAction('worker','gpu-worker-4','recover')">Recover</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-hd" style="margin-top:20px">Event Log</div>
+      <div class="fault-log" id="faultLog">
+        <div class="fault-log-empty">Actions you take will appear here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== LINKS ===== -->
+  <div class="panel" id="panLinks">
+    <div style="width:100%">
+      <div class="link-cat-title">Observability</div>
+      <div class="links-grid" style="margin-top:10px">
+        <a href="http://localhost:3000" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(241,128,23,.1);color:#f18017"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div class="link-card-name">Grafana Dashboard</div>
+          <div class="link-card-url">localhost:3000</div>
+          <div class="link-card-desc">Real-time metrics, latency histograms, throughput graphs, worker load charts.</div>
+        </a>
+        <a href="http://localhost:9090/targets" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(232,88,0,.1);color:#e85800"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+          <div class="link-card-name">Prometheus Targets</div>
+          <div class="link-card-url">localhost:9090/targets</div>
+          <div class="link-card-desc">Scrape targets health: workers, masters, and load balancer metrics endpoints.</div>
+        </a>
+        <a href="http://localhost:9090/graph" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(232,88,0,.1);color:#e85800"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+          <div class="link-card-name">Prometheus Graph</div>
+          <div class="link-card-url">localhost:9090/graph</div>
+          <div class="link-card-desc">Query raw PromQL metrics — request counts, latency quantiles, error rates.</div>
+        </a>
+      </div>
+      <div class="link-cat-title" style="margin-top:20px">API Documentation</div>
+      <div class="links-grid" style="margin-top:10px">
+        <a href="http://localhost:7000/docs" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(217,119,6,.1);color:var(--amber2)"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></div>
+          <div class="link-card-name">Load Balancer API</div>
+          <div class="link-card-url">localhost:7000/docs</div>
+          <div class="link-card-desc">LB endpoints: /request, /health, /admin/masters, /admin/master/{id}/fail|recover, /admin/strategy.</div>
+        </a>
+        <a href="http://localhost:9000/docs" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(59,130,246,.1);color:var(--blue)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <div class="link-card-name">Master-1 API</div>
+          <div class="link-card-url">localhost:9000/docs</div>
+          <div class="link-card-desc">Master endpoints: /request, /workers, /health, /admin/strategy, /admin/worker/{id}/fail|recover.</div>
+        </a>
+        <a href="http://localhost:9001/docs" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(59,130,246,.1);color:var(--blue)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <div class="link-card-name">Master-2 API</div>
+          <div class="link-card-url">localhost:9001/docs</div>
+          <div class="link-card-desc">Second master instance — same API surface as master-1, independent state.</div>
+        </a>
+      </div>
+      <div class="link-cat-title" style="margin-top:20px">Live Data</div>
+      <div class="links-grid" style="margin-top:10px">
+        <a href="http://localhost:9000/workers" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(34,197,94,.1);color:var(--green)"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="link-card-name">Worker Registry (JSON)</div>
+          <div class="link-card-url">localhost:9000/workers</div>
+          <div class="link-card-desc">Live worker list with status, active tasks, pending tasks, and GPU metadata.</div>
+        </a>
+        <a href="http://localhost:7000/health" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(34,197,94,.1);color:var(--green)"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div class="link-card-name">LB Health (JSON)</div>
+          <div class="link-card-url">localhost:7000/health</div>
+          <div class="link-card-desc">Load balancer health endpoint with master circuit-breaker states.</div>
+        </a>
+        <a href="http://localhost:7000/admin/masters" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(217,119,6,.1);color:var(--amber2)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+          <div class="link-card-name">Masters Status (JSON)</div>
+          <div class="link-card-url">localhost:7000/admin/masters</div>
+          <div class="link-card-desc">LB view of master proxies — inflight counts, health state, circuit breaker.</div>
+        </a>
+        <a href="http://localhost:9000/metrics" target="_blank" class="link-card">
+          <div class="link-card-icon" style="background:rgba(232,88,0,.1);color:#e85800"><svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></div>
+          <div class="link-card-name">Raw Prometheus Metrics</div>
+          <div class="link-card-url">localhost:9000/metrics</div>
+          <div class="link-card-desc">Prometheus text format — scraped every 5 s by the Prometheus container.</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panels -->
 
 <script>
-const API = '';  // same origin via nginx
-let msgCount = 0, totalLatency = 0;
+// ─── State ────────────────────────────────────────────────────────
+let chatCount = 0, totalLatency = 0;
+let benchRunning = false, benchStop = false;
+let currentStrategy = '—';
+const benchHistory = [];
+const faultLogEntries = [];
 
-// Chat
-async function sendMessage() {
-  const input = document.getElementById('chatInput');
-  const prompt = input.value.trim();
+const prompts = [
+  'What is load balancing?','Explain distributed systems','What is Docker?',
+  'How does GPU inference work?','What is RAG?','Explain CUDA programming',
+  'What is fault tolerance?','How do transformers work?','What is quantization?',
+  'Explain microservices architecture','How does NGINX work?',
+  'What is model parallelism?','Explain the attention mechanism','What is FAISS?'
+];
+
+// ─── Tab switching ────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pan' + name).classList.add('active');
+}
+
+// ─── Clock ───────────────────────────────────────────────────────
+function tick() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+tick(); setInterval(tick, 1000);
+
+// ─── HTML escaping ────────────────────────────────────────────────
+function esc(t) {
+  return String(t)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;');
+}
+function renderBot(t) {
+  return esc(t).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+}
+
+// ─── Chat ────────────────────────────────────────────────────────
+async function sendChat() {
+  const inp = document.getElementById('chatInput');
+  const prompt = inp.value.trim();
   if (!prompt) return;
-  input.value = '';
+  inp.value = '';
   document.getElementById('sendBtn').disabled = true;
-  msgCount++;
+  chatCount++;
 
-  addMessage(prompt, 'user');
+  addChatMsg(prompt, 'user');
   const typing = addTyping();
-
-  const start = performance.now();
-  const reqId = 'ui-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const t0 = performance.now();
+  const reqId = 'ui-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
 
   try {
-    const res = await fetch(API + '/request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_id: reqId, user_id: 'dashboard-user', prompt, metadata: { max_new_tokens: 512 } })
+    const res = await fetch('/request', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({request_id:reqId, user_id:'dashboard', prompt, metadata:{max_new_tokens:512}})
     });
     const data = await res.json();
-    const latency = ((performance.now() - start) / 1000).toFixed(1);
-    totalLatency += parseFloat(latency);
+    const lat = ((performance.now() - t0) / 1000).toFixed(2);
+    totalLatency += parseFloat(lat);
     typing.remove();
-
-    const context = data.context ? `<div class="rag-context">RAG Context: ${escapeHtml(data.context.split('---')[0].trim().substring(0, 150))}...</div>` : '';
-    addMessage(data.answer, 'bot', `${data.worker_id} • ${latency}s`, context);
-    document.getElementById('statMessages').textContent = msgCount;
-    document.getElementById('statAvgLatency').textContent = (totalLatency / msgCount).toFixed(1) + 's';
-  } catch (e) {
+    const ragHtml = data.context ? `<div class="rag">RAG: ${esc(data.context.split('---')[0].trim().slice(0,100))}…</div>` : '';
+    addChatMsg(data.answer, 'bot', `${data.worker_id||'?'} · ${lat}s`, ragHtml);
+    document.getElementById('csMessages').textContent = chatCount;
+    document.getElementById('csLatency').textContent = (totalLatency/chatCount).toFixed(1)+'s';
+  } catch(e) {
     typing.remove();
-    addMessage('Error: ' + e.message, 'bot', 'error', '', iconSvg('warning'));
+    addChatMsg('Error: ' + e.message, 'bot', 'error');
   }
   document.getElementById('sendBtn').disabled = false;
-  document.getElementById('chatInput').focus();
+  inp.focus();
 }
 
-function addMessage(text, type, meta = '', extraHtml = '', prefixHtml = '') {
+function addChatMsg(text, type, meta='', extra='') {
   const div = document.createElement('div');
   div.className = 'msg ' + type;
-  const body = type === 'bot' ? renderBotText(text) : escapeHtml(text);
-  div.innerHTML = `<div class="message-line">${prefixHtml}<span class="message-text">${body}</span></div>${extraHtml}${meta ? `<div class="meta"><span>${escapeHtml(meta)}</span></div>` : ''}`;
-  document.getElementById('chatMessages').appendChild(div);
-  div.scrollIntoView({ behavior: 'smooth' });
+  div.innerHTML = `<div>${type==='bot' ? renderBot(text) : esc(text)}</div>${extra}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}`;
+  const msgs = document.getElementById('chatMsgs');
+  msgs.appendChild(div);
+  div.scrollIntoView({behavior:'smooth'});
   return div;
-}
-
-function iconSvg(kind) {
-  const icons = {
-    success: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16 9"></path></svg>',
-    warning: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 4.7h3.4L22 17.8V19.5A2.5 2.5 0 0 1 19.5 22H4.5A2.5 2.5 0 0 1 2 19.5v-1.7L10.3 4.7z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>',
-    chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16"></path><rect x="6" y="12" width="3" height="7" rx="1"></rect><rect x="10.5" y="8" width="3" height="11" rx="1"></rect><rect x="15" y="5" width="3" height="14" rx="1"></rect></svg>'
-  };
-  return `<span class="msg-icon msg-icon-${kind}" aria-hidden="true">${icons[kind] || icons.warning}</span>`;
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function renderBotText(text) {
-  const escaped = escapeHtml(text);
-  return escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
 }
 
 function addTyping() {
   const div = document.createElement('div');
-  div.className = 'typing';
+  div.className = 'typing-ind';
   div.innerHTML = '<span></span><span></span><span></span>';
-  document.getElementById('chatMessages').appendChild(div);
-  div.scrollIntoView({ behavior: 'smooth' });
+  const msgs = document.getElementById('chatMsgs');
+  msgs.appendChild(div);
+  div.scrollIntoView({behavior:'smooth'});
   return div;
 }
 
-// Enter key
 document.getElementById('chatInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 
-// Strategy switch
-async function switchStrategy(strategy) {
+// ─── Strategy switch ──────────────────────────────────────────────
+async function switchStrategy(strategy, btn) {
   try {
     const res = await fetch('/admin/strategy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ strategy })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({strategy})
     });
     if (res.ok) {
-      document.getElementById('statStrategy').textContent = strategy.replace(/_/g, ' ');
-      addMessage(`LB strategy switched to **${strategy}**`, 'bot', 'System', '', iconSvg('success'));
+      currentStrategy = strategy;
+      document.getElementById('csStrategy').textContent = strategy.replace(/_/g,' ');
+      document.querySelectorAll('.strat-btn').forEach(b => b.classList.remove('active-strat'));
+      if (btn) btn.classList.add('active-strat');
+      addChatMsg(`Strategy switched to **${strategy}**`, 'bot', 'System');
     }
-  } catch (e) {
-    addMessage('Failed to switch strategy: ' + e.message, 'bot', 'error', '', iconSvg('warning'));
+  } catch(e) {
+    addChatMsg('Failed to switch strategy: '+e.message, 'bot', 'System');
   }
 }
 
-// Fault injection
-async function toggleFault(workerId, action) {
-  try {
-    const res = await fetch(`/admin/worker/${workerId}/${action}`, { method: 'POST' });
-    if (res.ok) {
-      addMessage(`${action === 'fail' ? 'Killed' : 'Recovered'} worker **${workerId}**`, 'bot', 'System', '', iconSvg(action === 'fail' ? 'warning' : 'success'));
-      updateWorkers();
-    } else {
-      const errText = await res.text();
-      throw new Error(`Server returned ${res.status}: ${errText}`);
-    }
-  } catch (e) {
-    addMessage(`Failed to ${action} ${workerId}: ` + e.message, 'bot', 'error', '', iconSvg('warning'));
-  }
-}
-
-// Benchmark
-let benchRunning = false;
-async function runBenchmark(n) {
-  if (benchRunning) return;
-  benchRunning = true;
-  const btn = n >= 1000 ? document.getElementById('benchBtn1k') : document.getElementById('benchBtn');
-  const otherBtn = n >= 1000 ? document.getElementById('benchBtn') : document.getElementById('benchBtn1k');
-  const prog = document.getElementById('benchProgress');
-  const bar = document.getElementById('benchBarFill');
-  const count = document.getElementById('benchCount');
-  const timer = document.getElementById('benchTime');
-  const result = document.getElementById('benchResult');
-  btn.classList.add('running');
-  btn.querySelector('.label').textContent = `Benchmark Running (${n})...`;
-  otherBtn.style.pointerEvents = 'none';
-  otherBtn.style.opacity = '0.4';
-  prog.classList.add('active');
-  result.style.display = 'none';
-  bar.style.width = '0%';
-  document.getElementById('benchTitle').textContent = `Running ${n}-user benchmark...`;
-
-  const prompts = [
-    'What is load balancing?','Explain distributed systems','What is Docker?',
-    'How does GPU inference work?','What is RAG?','Explain CUDA programming',
-    'What is fault tolerance?','How do transformers work?','What is quantization?',
-    'Explain microservices architecture','What is Kubernetes?','How does NGINX work?',
-    'What is model parallelism?','Explain the attention mechanism','What is FAISS?'
-  ];
-  let ok = 0, errors = 0, done = 0;
-  const dist = {};
-  const start = performance.now();
-  
-  // Poll more aggressively while benchmark is running
-  const activePoll = setInterval(updateWorkers, 500);
-
-  const timerInt = setInterval(() => {
-    timer.textContent = ((performance.now() - start) / 1000).toFixed(0) + 's';
-  }, 1000);
-
-  const sendOne = async (i) => {
-    const maxAttempts = 30, maxWait = 10000;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const res = await fetch(API + '/request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ request_id: `bench-${i}-${attempt}`, user_id: `user-${i}`, prompt: prompts[i % prompts.length], metadata: {} })
-        });
-        if (res.status === 503) {
-          const wait = Math.min(1000 * Math.pow(2, attempt), maxWait);
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-        const data = await res.json();
-        if (data.status === 'completed') {
-          ok++;
-          dist[data.worker_id] = (dist[data.worker_id] || 0) + 1;
-          break;
-        }
-      } catch (e) {
-        const wait = Math.min(1000 * Math.pow(2, attempt), maxWait);
-        await new Promise(r => setTimeout(r, wait));
-      }
-    }
-    done++;
-    bar.style.width = ((done / n) * 100) + '%';
-    count.textContent = `${done} / ${n}`;
-  };
-
-  // Run with bounded concurrency (4) so we don't saturate the browser's 6-connection limit per host.
-  // This leaves 2 TCP sockets free for /workers polling and Kill/Recover buttons!
-  let currentIdx = 0;
-  const workerPool = Array(4).fill(0).map(async () => {
-    while (currentIdx < n && benchRunning) {
-      await sendOne(currentIdx++);
-    }
-  });
-  await Promise.all(workerPool);
-
-  clearInterval(timerInt);
-  clearInterval(activePoll);
-  errors = n - ok;
-  const elapsed = ((performance.now() - start) / 1000).toFixed(1);
-  const rps = (ok / parseFloat(elapsed)).toFixed(1);
-  const distStr = Object.entries(dist).map(([k, v]) => `${k.replace('gpu-','')}: ${v}`).join(', ');
-
-  result.style.display = 'block';
-  result.innerHTML = `<div class="bench-summary">${iconSvg(errors === 0 ? 'success' : 'warning')}<div class="bench-summary-text"><strong>${ok}/${n} ok, ${errors} errors</strong><br>Time: ${elapsed}s • Throughput: ${rps} rps<br>Distribution: ${distStr}</div></div>`;
-  btn.classList.remove('running');
-  btn.classList.add(errors === 0 ? 'success' : 'error');
-  btn.querySelector('.label').textContent = `Done: ${ok}/${n} — Run Again?`;
-  otherBtn.style.pointerEvents = '';
-  otherBtn.style.opacity = '';
-  addMessage(`**Benchmark complete:** ${ok}/${n} ok, ${errors} errors in ${elapsed}s (${rps} rps)\nDistribution: ${distStr}`, 'bot', 'System', '', iconSvg('chart'));
-  benchRunning = false;
-  const origLabel = n >= 1000 ? 'Run 1000 Users Load Test' : 'Run 100 Users Load Test';
-  setTimeout(() => { btn.classList.remove('success', 'error'); btn.querySelector('.label').textContent = origLabel; }, 10000);
-}
-
-// Worker status polling
-async function updateWorkers() {
+// ─── Worker polling ───────────────────────────────────────────────
+async function pollWorkers() {
   try {
     const res = await fetch('/workers');
+    if (!res.ok) return;
     const workers = await res.json();
     if (!Array.isArray(workers)) return;
-    const statusMap = { healthy: 'HEALTHY', degraded: 'DEGRADED', failed: 'FAILED' };
-    const ids = ['w1', 'w2', 'w3', 'w4'];
-    workers.forEach((w, i) => {
-      if (i >= 4) return;
-      const card = document.getElementById(ids[i]);
-      if (!card) return;
-      const status = w.status || 'healthy';
-      card.className = 'worker-card ' + status;
-      card.querySelector('.status-badge').textContent = statusMap[status] || status;
-      card.querySelector('.tasks').textContent = `Active: ${w.active_tasks || 0} / Pending: ${w.pending_tasks || 0}`;
-      
-      const btn = card.querySelector('.fault-btn');
-      if (status === 'failed') {
-        btn.textContent = 'Recover';
-        btn.className = 'fault-btn recover';
-        btn.onclick = () => toggleFault(w.worker_id || `worker-${i+1}`, 'recover');
-      } else {
-        btn.textContent = 'Kill';
-        btn.className = 'fault-btn kill';
-        btn.onclick = () => toggleFault(w.worker_id || `worker-${i+1}`, 'fail');
-      }
-    });
-  } catch (e) { /* silent */ }
+    updateWorkerCards(workers);
+    updateChatSideWorkers(workers);
+    updateFaultWorkers(workers);
+  } catch(e) {}
 }
 
-// Init
-async function init() {
-  updateWorkers();
-  document.getElementById('statGpuFree').textContent = '~3.5 GB';
-  try {
-    const res = await fetch('/workers');
-    const workers = await res.json();
-    document.getElementById('statStrategy').textContent = 'load aware';
-  } catch (e) {}
+function statusClass(s) {
+  if (s === 'healthy') return 'healthy';
+  if (s === 'degraded') return 'degraded';
+  if (s === 'failed') return 'failed';
+  return 'unknown';
 }
+function statusLabel(s) { return (s || 'unknown').toUpperCase(); }
+
+function updateWorkerCards(workers) {
+  const ids = ['monW1','monW2','monW3','monW4'];
+  workers.slice(0,4).forEach((w,i) => {
+    const sc = statusClass(w.status);
+    const card = document.getElementById(ids[i]);
+    const badge = document.getElementById(ids[i]+'Badge');
+    if (!card) return;
+    card.className = 'mon-card ' + sc;
+    badge.className = 'mon-card-badge ' + sc;
+    badge.textContent = statusLabel(w.status);
+    document.getElementById(ids[i]+'Meta').textContent =
+      `active: ${w.active_tasks??'—'} · pending: ${w.pending_tasks??'—'} · max: ${w.max_concurrent_tasks??'—'}`;
+    const pct = w.max_concurrent_tasks > 0 ? Math.min(100,(w.active_tasks||0)/w.max_concurrent_tasks*100) : 0;
+    const barEl = document.getElementById(ids[i]+'Bar');
+    const pctEl = document.getElementById(ids[i]+'Pct');
+    barEl.style.width = pct + '%';
+    barEl.className = 'mon-bar-fill ' + (pct > 80 ? 'red' : pct > 50 ? 'yellow' : 'green');
+    pctEl.textContent = pct.toFixed(0) + '%';
+  });
+}
+
+function updateChatSideWorkers(workers) {
+  const list = document.getElementById('csWorkerList');
+  list.innerHTML = workers.map(w => {
+    const sc = statusClass(w.status);
+    return `<div class="cs-worker"><span class="cs-dot ${sc}"></span><span class="wname">${esc(w.worker_id||'?')}</span><span class="wtasks">${w.active_tasks??0}/${w.max_concurrent_tasks??'?'}</span></div>`;
+  }).join('');
+  const healthy = workers.filter(w => w.status === 'healthy').length;
+  document.getElementById('csWorkers').textContent = `${healthy}/${workers.length}`;
+}
+
+function updateFaultWorkers(workers) {
+  const map = {'gpu-worker-1':'W1','gpu-worker-2':'W2','gpu-worker-3':'W3','gpu-worker-4':'W4'};
+  workers.forEach(w => {
+    const key = map[w.worker_id];
+    if (!key) return;
+    const sc = statusClass(w.status);
+    const card = document.getElementById('faultW'+key.slice(1));
+    if (!card) return;
+    card.className = 'fault-entity ' + sc;
+    document.getElementById('faultW'+key.slice(1)+'Pill').className = 'fault-status-pill '+sc;
+    document.getElementById('faultW'+key.slice(1)+'Pill').textContent = statusLabel(w.status);
+    document.getElementById('faultW'+key.slice(1)+'Meta').innerHTML =
+      `active: <span>${w.active_tasks??'—'}</span> · pending: <span>${w.pending_tasks??'—'}</span>`;
+    const failed = w.status === 'failed';
+    document.getElementById('faultW'+key.slice(1)+'Kill').disabled = failed;
+    document.getElementById('faultW'+key.slice(1)+'Rec').disabled = !failed;
+  });
+}
+
+// ─── Master polling ───────────────────────────────────────────────
+async function pollMasters() {
+  try {
+    const res = await fetch('/admin/masters');
+    if (!res.ok) return;
+    const masters = await res.json();
+    if (!Array.isArray(masters)) return;
+    updateMasterCards(masters);
+    updateFaultMasters(masters);
+    const healthy = masters.filter(m => m.status === 'healthy').length;
+    document.getElementById('monMasterCount').textContent = `${healthy}/${masters.length}`;
+    document.getElementById('monLbStatus').textContent = healthy > 0 ? 'OK' : 'DEGRADED';
+  } catch(e) {}
+}
+
+function updateMasterCards(masters) {
+  const keys = ['M1','M2'];
+  masters.slice(0,2).forEach((m,i) => {
+    const k = keys[i];
+    const sc = statusClass(m.status);
+    const card = document.getElementById('monM'+k.slice(1));
+    const badge = document.getElementById('monM'+k.slice(1)+'Badge');
+    if (!card) return;
+    card.className = 'mon-card ' + sc;
+    badge.className = 'mon-card-badge ' + sc;
+    badge.textContent = statusLabel(m.status);
+    document.getElementById('monM'+k.slice(1)+'Meta').innerHTML =
+      `inflight: ${m.inflight??'—'} · circuit: <span>${m.circuit_state||m.status||'—'}</span>`;
+  });
+}
+
+function updateFaultMasters(masters) {
+  const mids = {0:'1',1:'2'};
+  masters.slice(0,2).forEach((m,i) => {
+    const n = mids[i];
+    const sc = statusClass(m.status);
+    const card = document.getElementById('faultM'+n);
+    if (!card) return;
+    card.className = 'fault-entity ' + sc;
+    document.getElementById('faultM'+n+'Pill').className = 'fault-status-pill '+sc;
+    document.getElementById('faultM'+n+'Pill').textContent = statusLabel(m.status);
+    document.getElementById('faultM'+n+'Meta').innerHTML =
+      `inflight: <span>${m.inflight??'—'}</span> · state: <span>${m.circuit_state||m.status||'—'}</span>`;
+    const failed = m.status === 'failed';
+    document.getElementById('faultM'+n+'Kill').disabled = failed;
+    document.getElementById('faultM'+n+'Rec').disabled = !failed;
+  });
+}
+
+// ─── LB health ────────────────────────────────────────────────────
+async function pollLbHealth() {
+  try {
+    const res = await fetch('/health');
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('monLbMeta').textContent =
+      `strategy: ${data.strategy||'—'} · retries: ${data.lb_master_retries??1} · masters: ${data.num_masters??2}`;
+    if (data.strategy && data.strategy !== currentStrategy) {
+      currentStrategy = data.strategy;
+      document.getElementById('csStrategy').textContent = data.strategy.replace(/_/g,' ');
+    }
+  } catch(e) {}
+}
+
+// ─── Fault injection ──────────────────────────────────────────────
+async function faultAction(type, id, action) {
+  const url = type === 'master'
+    ? `/admin/master/${id}/${action}`
+    : `/admin/worker/${id}/${action}`;
+  try {
+    const res = await fetch(url, {method:'POST'});
+    const ok = res.ok;
+    const label = action === 'fail' ? 'kill' : 'recover';
+    logFaultEvent(label, `${type} ${id} → ${action} (${ok ? 'OK' : 'FAILED '+res.status})`);
+    if (ok) {
+      await Promise.all([pollWorkers(), pollMasters()]);
+    }
+  } catch(e) {
+    logFaultEvent('info', `Error: ${e.message}`);
+  }
+}
+
+function logFaultEvent(type, msg) {
+  const entry = {type, msg, ts: new Date().toTimeString().slice(0,8)};
+  faultLogEntries.unshift(entry);
+  const log = document.getElementById('faultLog');
+  const empty = log.querySelector('.fault-log-empty');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'fault-log-entry ' + type;
+  div.innerHTML = `<span class="fault-log-time">${esc(entry.ts)}</span>${esc(entry.msg)}`;
+  log.insertBefore(div, log.firstChild);
+  if (faultLogEntries.length > 50) { log.lastChild && log.removeChild(log.lastChild); }
+}
+
+// ─── Benchmark ────────────────────────────────────────────────────
+async function startBenchmark() {
+  if (benchRunning) return;
+  const n = parseInt(document.getElementById('benchUsers').value) || 100;
+  const concurrency = Math.min(parseInt(document.getElementById('benchConcurrency').value) || 10, 50);
+  const strategy = document.getElementById('benchStrategy').value;
+
+  // Switch strategy first
+  await fetch('/admin/strategy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy})}).catch(()=>{});
+
+  benchRunning = true; benchStop = false;
+  document.getElementById('benchRunBtn').disabled = true;
+  document.getElementById('benchRunBtn').classList.add('running-st');
+  document.getElementById('benchStopBtn').style.display = '';
+  document.getElementById('benchEmptyMsg').style.display = 'none';
+  document.getElementById('benchHistTitle').style.display = '';
+
+  const box = document.getElementById('benchProgressBox');
+  box.classList.add('show');
+  document.getElementById('benchProgTitle').textContent = `${n} users · ${concurrency} concurrent · ${strategy}`;
+  document.getElementById('benchBigFill').style.width = '0%';
+  document.getElementById('benchProgPct').textContent = '0%';
+  document.getElementById('benchDone').textContent = '0';
+  document.getElementById('benchOk').textContent = '0';
+  document.getElementById('benchErr').textContent = '0';
+  document.getElementById('benchRps').textContent = '—';
+  document.getElementById('benchElapsed').textContent = '0s';
+
+  let done=0, ok=0, err=0;
+  const dist = {};
+  const t0 = performance.now();
+
+  const timerInt = setInterval(() => {
+    const el = ((performance.now()-t0)/1000).toFixed(0);
+    document.getElementById('benchElapsed').textContent = el+'s';
+    const rps = done > 0 ? (ok / ((performance.now()-t0)/1000)).toFixed(1) : '—';
+    document.getElementById('benchRps').textContent = rps;
+  }, 500);
+
+  const sendOne = async (i) => {
+    if (benchStop) { done++; err++; updateBenchProgress(done,ok,err,n); return; }
+    try {
+      const res = await fetch('/request', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({request_id:`b-${i}-${Date.now()}`,user_id:`u${i}`,prompt:prompts[i%prompts.length],metadata:{}})
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.status === 'completed' || d.answer) {
+          ok++;
+          if (d.worker_id) dist[d.worker_id] = (dist[d.worker_id]||0)+1;
+        } else { err++; }
+      } else { err++; }
+    } catch(e) { err++; }
+    done++;
+    updateBenchProgress(done,ok,err,n);
+  };
+
+  let idx = 0;
+  const pool = Array(concurrency).fill(0).map(async () => {
+    while (idx < n && !benchStop) { await sendOne(idx++); }
+  });
+  await Promise.all(pool);
+
+  clearInterval(timerInt);
+  const elapsed = ((performance.now()-t0)/1000).toFixed(1);
+  const rps = (ok/parseFloat(elapsed)).toFixed(1);
+  const distStr = Object.entries(dist).map(([k,v])=>`${k.replace('gpu-','')}: ${v}`).join(', ') || '—';
+
+  saveBenchResult({n,ok,err,elapsed,rps,strategy,dist:distStr,ts:new Date().toTimeString().slice(0,8)});
+
+  benchRunning = false;
+  document.getElementById('benchRunBtn').disabled = false;
+  document.getElementById('benchRunBtn').classList.remove('running-st');
+  document.getElementById('benchStopBtn').style.display = 'none';
+  box.classList.remove('show');
+}
+
+function updateBenchProgress(done,ok,err,n) {
+  const pct = Math.round(done/n*100);
+  document.getElementById('benchBigFill').style.width = pct+'%';
+  document.getElementById('benchProgPct').textContent = pct+'%';
+  document.getElementById('benchDone').textContent = done;
+  document.getElementById('benchOk').textContent = ok;
+  document.getElementById('benchErr').textContent = err;
+}
+
+function stopBenchmark() { benchStop = true; }
+
+function saveBenchResult(r) {
+  benchHistory.unshift(r);
+  renderBenchHistory();
+}
+
+function renderBenchHistory() {
+  const container = document.getElementById('benchHistory');
+  container.innerHTML = benchHistory.map(r => {
+    const allOk = r.err === 0;
+    return `<div class="bench-result-card ${allOk?'ok-card':'err-card'}">
+      <div class="bench-result-top">
+        <div class="bench-result-name">${esc(r.strategy)} · ${r.n} users</div>
+        <div class="bench-result-time">${esc(r.ts)}</div>
+      </div>
+      <div class="bench-result-metrics">
+        <div class="bench-metric">OK: <span>${r.ok}</span></div>
+        <div class="bench-metric">Errors: <span>${r.err}</span></div>
+        <div class="bench-metric">Time: <span>${r.elapsed}s</span></div>
+        <div class="bench-metric">RPS: <span>${r.rps}</span></div>
+      </div>
+      <div class="bench-dist">Distribution: ${esc(r.dist)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Init & poll loop ─────────────────────────────────────────────
+async function init() {
+  await Promise.all([pollWorkers(), pollMasters(), pollLbHealth()]);
+}
+
 init();
-setInterval(updateWorkers, 5000);
+setInterval(() => { pollWorkers(); pollMasters(); }, 2000);
+setInterval(pollLbHealth, 5000);
 </script>
 </body>
 </html>

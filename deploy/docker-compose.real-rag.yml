@@ -1,5 +1,5 @@
 services:
-  master:
+  master-1:
     environment:
       RAG_USE_STUB: "false"
   lb:

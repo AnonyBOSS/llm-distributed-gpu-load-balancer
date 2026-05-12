@@ -109,7 +109,7 @@ services:
       retries: 60
       start_period: 300s
 
-  master:
+  master-1:
     environment:
       WORKER_HTTP_TIMEOUT_SEC: "120"
       # Real RAG: master loads sentence-transformers/all-MiniLM-L6-v2 (~90 MB)

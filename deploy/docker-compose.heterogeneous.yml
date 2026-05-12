@@ -38,6 +38,6 @@ services:
       MAX_CONCURRENT_TASKS: "400"
       WORKER_ID: gpu-worker-3
       GPU_NAME: NVIDIA-H100-SIM-large
-  master:
+  master-1:
     environment:
       MAX_CONCURRENT_TASKS: "400"  # tell the master the largest capacity
