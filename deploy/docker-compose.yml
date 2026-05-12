@@ -121,7 +121,7 @@ services:
       WORKER_IDS:  "gpu-worker-1,gpu-worker-2,gpu-worker-3,gpu-worker-4"
       LB_STRATEGY: load_aware
       MAX_CONCURRENT_TASKS: "400"
-      MAX_RETRIES: "1"
+      MAX_RETRIES: "3"
       RAG_USE_STUB: "true"
       RAG_TOP_K: "3"
       THREADPOOL_TOKENS: "1000"
@@ -154,7 +154,7 @@ services:
       WORKER_IDS:  "gpu-worker-1,gpu-worker-2,gpu-worker-3,gpu-worker-4"
       LB_STRATEGY: load_aware
       MAX_CONCURRENT_TASKS: "400"
-      MAX_RETRIES: "1"
+      MAX_RETRIES: "3"
       RAG_USE_STUB: "true"
       RAG_TOP_K: "3"
       THREADPOOL_TOKENS: "1000"
@@ -186,7 +186,7 @@ services:
       MASTER_URLS: "http://master-1:9000,http://master-2:9000"
       MASTER_IDS: "master-1,master-2"
       LB_STRATEGY: round_robin
-      LB_MASTER_RETRIES: "1"
+      LB_MASTER_RETRIES: "2"
       MASTER_MAX_INFLIGHT: "100"
       MASTER_HTTP_TIMEOUT_SEC: "60"
       THREADPOOL_TOKENS: "1000"

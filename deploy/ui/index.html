@@ -580,7 +580,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 <script>
 // ─── State ────────────────────────────────────────────────────────
 let chatCount = 0, totalLatency = 0;
-let benchRunning = false, benchStop = false;
+let benchRunning = false, benchStop = false, benchAbort = null;
 let currentStrategy = '—';
 const benchHistory = [];
 const faultLogEntries = [];
@@ -875,7 +875,7 @@ async function startBenchmark() {
   // Switch strategy first
   await fetch('http://localhost:9000/admin/strategy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy})}).catch(()=>{});
 
-  benchRunning = true; benchStop = false;
+  benchRunning = true; benchStop = false; benchAbort = new AbortController();
   document.getElementById('benchRunBtn').disabled = true;
   document.getElementById('benchRunBtn').classList.add('running-st');
   document.getElementById('benchStopBtn').style.display = '';
@@ -909,7 +909,8 @@ async function startBenchmark() {
     try {
       const res = await fetch('/request', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({request_id:`b-${i}-${Date.now()}`,user_id:`u${i}`,prompt:prompts[i%prompts.length],metadata:{}})
+        body: JSON.stringify({request_id:`b-${i}-${Date.now()}`,user_id:`u${i}`,prompt:prompts[i%prompts.length],metadata:{}}),
+        signal: benchAbort.signal
       });
       if (res.ok) {
         const d = await res.json();
@@ -918,7 +919,9 @@ async function startBenchmark() {
           if (d.worker_id) dist[d.worker_id] = (dist[d.worker_id]||0)+1;
         } else { err++; }
       } else { err++; }
-    } catch(e) { err++; }
+    } catch(e) {
+      if (e.name !== 'AbortError') err++;
+    }
     done++;
     updateBenchProgress(done,ok,err,n);
   };
@@ -952,7 +955,10 @@ function updateBenchProgress(done,ok,err,n) {
   document.getElementById('benchErr').textContent = err;
 }
 
-function stopBenchmark() { benchStop = true; }
+function stopBenchmark() {
+  benchStop = true;
+  if (benchAbort) benchAbort.abort();
+}
 
 function saveBenchResult(r) {
   benchHistory.unshift(r);

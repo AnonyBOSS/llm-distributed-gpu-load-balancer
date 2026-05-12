@@ -117,5 +117,9 @@ services:
       # to the first request, ~10-50 ms per call thereafter.
       RAG_USE_STUB: "false"
 
+  master-2:
+    environment:
+      WORKER_HTTP_TIMEOUT_SEC: "120"
+      RAG_USE_STUB: "false"
 volumes:
   hf-cache:
