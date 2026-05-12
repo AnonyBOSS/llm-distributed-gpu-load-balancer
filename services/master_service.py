@@ -267,7 +267,13 @@ def admin_fail_worker(worker_id: str) -> dict[str, object]:
     """Manually fail a worker to demonstrate fault tolerance."""
     for proxy in proxies:
         if proxy.worker_id == worker_id:
-            return proxy.post_json("/admin/fail", {})
+            # Mark the proxy FAILED first so the LB stops routing immediately,
+            # without waiting for the circuit breaker to accumulate 3 strikes.
+            proxy.mark_failed()
+            try:
+                return proxy.post_json("/admin/fail", {})
+            except Exception:
+                return {"worker_id": worker_id, "status": "failed"}
     raise HTTPException(status_code=404, detail="worker not found")
 
 
@@ -276,7 +282,9 @@ def admin_recover_worker(worker_id: str) -> dict[str, object]:
     """Manually recover a failed worker."""
     for proxy in proxies:
         if proxy.worker_id == worker_id:
-            return proxy.post_json("/admin/recover", {})
+            result = proxy.post_json("/admin/recover", {})
+            proxy.mark_healthy()
+            return result
     raise HTTPException(status_code=404, detail="worker not found")
 
 

@@ -53,7 +53,7 @@
       "id": 4,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "textMode": "value_and_name"},
       "targets": [
-        {"expr": "target_status{service=\"master\"}", "legendFormat": "{{target}}", "refId": "A"}
+        {"expr": "max by (target) (target_status{service=\"master\"})", "legendFormat": "{{target}}", "refId": "A"}
       ],
       "title": "Worker status (master view)",
       "type": "stat"
