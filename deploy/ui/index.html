@@ -895,6 +895,7 @@ async function startBenchmark() {
 
   let done=0, ok=0, err=0;
   const dist = {};
+  const latencies = [];
   const t0 = performance.now();
 
   const timerInt = setInterval(() => {
@@ -906,6 +907,7 @@ async function startBenchmark() {
 
   const sendOne = async (i) => {
     if (benchStop) { done++; err++; updateBenchProgress(done,ok,err,n); return; }
+    const rt0 = performance.now();
     try {
       const res = await fetch('/request', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -916,6 +918,7 @@ async function startBenchmark() {
         const d = await res.json();
         if (d.status === 'completed' || d.answer) {
           ok++;
+          latencies.push(performance.now() - rt0);
           if (d.worker_id) dist[d.worker_id] = (dist[d.worker_id]||0)+1;
         } else { err++; }
       } else { err++; }
@@ -937,7 +940,11 @@ async function startBenchmark() {
   const rps = (ok/parseFloat(elapsed)).toFixed(1);
   const distStr = Object.entries(dist).map(([k,v])=>`${k.replace('gpu-','')}: ${v}`).join(', ') || '—';
 
-  saveBenchResult({n,ok,err,elapsed,rps,strategy,dist:distStr,ts:new Date().toTimeString().slice(0,8)});
+  latencies.sort((a,b) => a-b);
+  const avgLat = latencies.length ? (latencies.reduce((s,v)=>s+v,0)/latencies.length/1000).toFixed(2) : null;
+  const p99Lat = latencies.length ? (latencies[Math.floor(latencies.length*0.99)]/1000).toFixed(2) : null;
+
+  saveBenchResult({n,ok,err,elapsed,rps,strategy,dist:distStr,avgLat,p99Lat,ts:new Date().toTimeString().slice(0,8)});
 
   benchRunning = false;
   document.getElementById('benchRunBtn').disabled = false;
@@ -979,6 +986,8 @@ function renderBenchHistory() {
         <div class="bench-metric">Errors: <span>${r.err}</span></div>
         <div class="bench-metric">Time: <span>${r.elapsed}s</span></div>
         <div class="bench-metric">RPS: <span>${r.rps}</span></div>
+        ${r.avgLat != null ? `<div class="bench-metric">Avg lat: <span>${r.avgLat}s</span></div>` : ''}
+        ${r.p99Lat != null ? `<div class="bench-metric">p99 lat: <span>${r.p99Lat}s</span></div>` : ''}
       </div>
       <div class="bench-dist">Distribution: ${esc(r.dist)}</div>
     </div>`;
