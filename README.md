@@ -25,13 +25,22 @@ strategies plus a fault-injection scenario. An interactive web dashboard provide
 
 ![Dashboard UI — Chat tab showing a RAG-grounded LLM response routed through the cluster](docs/assets/ui_chat.png)
 
+### Results at a glance
+
+From [docs/benchmarks.md](docs/benchmarks.md) — simulated inference on one 4-vCPU Linux host unless noted:
+
+- **1,000 simultaneous requests:** 0 failed under all four strategies, p99 3.4–4.0 s. Across 22 such runs, 99.6–100 % of requests were served on the first attempt; the rest needed one client retry (see the known issue in the benchmarks doc).
+- **Worker crash mid-run:** with a worker SIGKILLed during a 250-user burst, 250 / 250 were served, all on the first attempt — its in-flight requests failed over to the healthy workers.
+- **Uneven worker capacity (50 : 100 : 400 : 400 slots):** `load_aware` and `power_of_two` route traffic close to the capacity ratio and have the lowest p99.
+- **Real Qwen2.5-0.5B** on 2 GPU + 2 CPU workers (laptop RTX 3060, author's run): a 1,000-request burst — far beyond the cluster's 16 in-flight slots — was fully served in 611 s through load shedding and client backoff.
+
 The single-process simulation (`main.py`, `scripts/smoke_concurrent.py`)
 is preserved for fast local iteration and is what the unit tests target.
 
 ### Quickstart (distributed mode)
 
 ```bash
-make up                                       # CPU stack (9 containers)
+make up                                       # CPU stack (10 containers)
 curl -X POST http://localhost:8080/request \
      -H 'Content-Type: application/json' \
      -d '{"request_id":"r1","user_id":"u1","prompt":"hello","metadata":{}}'
@@ -55,7 +64,7 @@ Benchmark variants:
 ```bash
 make bench           # full 4-strategy x 4-user-count run + fault injection (~10 min)
 make bench-batching  # sim vs continuous-batching head-to-head
-make bench-hetero    # heterogeneous workers (capacity 1:2:8) — strategies actually differ
+make bench-hetero    # heterogeneous workers (50:100:400:400 slots) — strategies actually differ
 ```
 
 GPU mode (requires NVIDIA GPU + `nvidia-container-toolkit`):
@@ -63,7 +72,7 @@ GPU mode (requires NVIDIA GPU + `nvidia-container-toolkit`):
 ```bash
 make gpu-up          # 2 GPU workers + 2 CPU workers, all real Qwen LLM
 make gpu-smoke       # one real inference end-to-end
-make bench-gpu       # GPU benchmark (defaults to 100 users)
+make bench-gpu       # GPU benchmark (round_robin at 50 / 250 / 1000 users)
 make gpu-down
 ```
 
@@ -119,9 +128,9 @@ failure-recovery model, and concurrency story.
 - a real `RAGRetriever` in `rag` backed by `sentence-transformers` and FAISS, with a fast deterministic stub
 - FastAPI services in [services/](services/) for worker, master, and LB tiers, each exposing `/health` and Prometheus `/metrics`
 - Prometheus + Grafana stack pre-provisioned in [deploy/](deploy/) with a dashboard for throughput, p50/p95/p99 latency, per-worker utilisation, and live worker status
-- 48 unit tests + 4 integration tests in [tests/](tests/) covering the herd regression, scheduler retry/fallover, monitor circuit breaker, RAG, and the live compose stack
+- 53 unit tests + 5 integration tests in [tests/](tests/) covering the herd regression, scheduler retry/fallover, monitor circuit breaker, RAG, and the live compose stack
 - GitHub Actions CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) running unit tests on push and integration tests on PRs
-- benchmark harness in [scripts/benchmark.py](scripts/benchmark.py) running 100→1000 ramps × 3 strategies × clean/fault, saving CSV + chart PNGs
+- benchmark harness in [scripts/benchmark.py](scripts/benchmark.py) running 100→1000 ramps × 4 strategies plus a worker-kill fault run, saving CSV + chart PNGs and counting how many requests needed a client-side retry
 
 ### Documentation
 
@@ -204,7 +213,7 @@ Internals:
 ClientLoadGenerator
         |
         v
-   LoadBalancer.select_worker(request)        <-- round_robin | least_connections | load_aware
+   LoadBalancer.select_worker(request)        <-- round_robin | least_connections | load_aware | power_of_two
         |
         v
 MasterScheduler.handle_request(request, worker)
@@ -224,26 +233,35 @@ MasterScheduler.handle_request(request, worker)
 
 ```text
 .
-|-- client/
-|   `-- generator.py            # synthetic incoming requests
+|-- client/                     # synthetic load generator + metrics collector
 |-- common/
-|   `-- models.py               # Request and Response dataclasses
+|   |-- models.py               # Request and Response dataclasses
+|   |-- wire.py                 # Pydantic HTTP wire models
+|   `-- metrics.py              # Prometheus metrics helpers
 |-- lb/
-|   `-- round_robin.py          # LoadBalancer + LoadBalancingStrategy enum
+|   `-- round_robin.py          # LoadBalancer + the four strategies
 |-- master/
-|   `-- scheduler.py            # MasterScheduler with retry and per-worker stats
+|   |-- scheduler.py            # MasterScheduler with retry and per-worker stats
+|   `-- health_monitor.py       # active health probes + 3-strike circuit breaker
 |-- workers/
-|   `-- gpu_worker.py           # GPUWorkerNode, WorkerStatus, exception types
+|   |-- gpu_worker.py           # GPUWorkerNode, WorkerStatus, exception types
+|   `-- remote_proxy.py         # HTTP proxy that duck-types as a worker
 |-- llm/
-|   `-- inference.py            # LLMInferenceEngine + simulated and HF backends
+|   `-- inference.py            # LLMInferenceEngine: sim, batched-sim, and HF backends
 |-- rag/
 |   |-- corpus.py               # in-memory document collection (65 docs)
 |   `-- retriever.py            # FAISS-backed retriever with stub fast path
-|-- scripts/
-|   `-- smoke_concurrent.py     # 50-thread concurrent smoke test
+|-- services/                   # FastAPI apps: lb_service, master_service, worker_service
+|-- deploy/                     # Dockerfiles, compose files (CPU, GPU, heterogeneous), nginx,
+|                               #   Prometheus, Grafana, dashboard UI
+|-- scripts/                    # benchmark.py, heterogeneous_bench.py, gpu_smoke.py,
+|                               #   smoke_concurrent.py
+|-- benchmarks/                 # results CSVs + charts
+|-- tests/                      # unit/ (53) and integration/ (5)
+|-- docs/                       # architecture.md, benchmarks.md
 |-- main.py                     # deterministic dry-run entrypoint
-|-- requirements.txt
-`-- README.md
+|-- Makefile
+`-- requirements*.txt
 ```
 
 ## Setup
@@ -314,7 +332,7 @@ The smoke test fans out N threads, each one routing through the load balancer, t
 Useful flags:
 
 - `--users N` — number of concurrent client threads (default 50)
-- `--strategy {round_robin,least_connections,load_aware}` — load-balancing policy (default `least_connections`)
+- `--strategy {round_robin,least_connections,load_aware,power_of_two}` — load-balancing policy (default `least_connections`)
 - `--failure-rate F` — per-worker probability of a transient failure on each request, in `[0.0, 1.0]`
 - `--fault-after K` — after K requests have been dispatched, mark `gpu-worker-2` as `FAILED`; this exercises hard-failure detection and reassignment
 - `--real-rag` — use the FAISS-backed retriever instead of the stub (downloads the embedding model on first run)
