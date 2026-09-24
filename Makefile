@@ -9,7 +9,7 @@ COMPOSE_HETERO := docker compose -f deploy/docker-compose.yml -f deploy/docker-c
 help:                 ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-20s %s\n", $$1, $$2}'
 
-up:                   ## Build + start the CPU compose stack (9 containers)
+up:                   ## Build + start the CPU compose stack (10 containers)
 	$(COMPOSE) up -d --build
 
 down:                 ## Stop and remove the CPU compose stack
@@ -53,7 +53,7 @@ gpu-down:             ## Stop the GPU stack
 gpu-smoke:            ## Send one real Qwen inference and print the answer
 	python scripts/gpu_smoke.py
 
-hetero-up:            ## Restart workers with heterogeneous capacity (1:2:8)
+hetero-up:            ## Restart workers with heterogeneous capacity (50:100:400:400)
 	$(COMPOSE_HETERO) up -d --force-recreate
 
 hetero-down:          ## Stop the heterogeneous stack

@@ -1,6 +1,6 @@
 # Compose override that runs workers with DIFFERENT capacity.
 #
-# In the homogeneous default compose all workers have MAX_CONCURRENT_TASKS=8,
+# In the default compose all four workers have MAX_CONCURRENT_TASKS=400,
 # so round_robin / least_connections / load_aware / power_of_two all produce
 # similar distributions -- there's no signal in the choice.
 #
@@ -11,18 +11,15 @@
 # then:
 #   python scripts/heterogeneous_bench.py
 #
-# Capacity ratio 1:2:4 (worker-1 : worker-2 : worker-3). Strategies that
-# look at capacity (load_aware) or pending count (power_of_two) should
-# materially beat round_robin under this configuration.
+# Capacities 50 : 100 : 400 : 400 (worker-1 : worker-2 : worker-3 : worker-4),
+# 950 in-flight slots in total. Capacity-blind strategies (round_robin,
+# least_connections) send each worker ~1/4 of the traffic; capacity-aware
+# ones (load_aware, power_of_two) should shift traffic to the larger workers.
 
 services:
-  # Capacities preserve the 1:2:8 ratio while sized for the brief's
-  # 1000-user benchmark. With self-shedding active (Week 4 fix), capacity
-  # ratios that are too tight versus the offered load reject most traffic.
-  # 50:100:400 = 550 slots total: under round_robin the small worker (50)
-  # is overloaded (gets 333 of 1000) and rejects ~283; under load_aware
-  # the distribution shifts to ~91:182:727 (proportional to capacity) so
-  # all 1000 fit. That's the demonstration the report wants.
+  # Sized for the 1000-user benchmark. Workers self-shed (503) past their
+  # capacity, so under round_robin the small worker (50 slots) is handed far
+  # more than it can hold and sheds the excess; the client retries it.
   worker-1:
     environment:
       MAX_CONCURRENT_TASKS: "50"
@@ -37,6 +34,11 @@ services:
     environment:
       MAX_CONCURRENT_TASKS: "400"
       WORKER_ID: gpu-worker-3
+      GPU_NAME: NVIDIA-H100-SIM-large
+  worker-4:
+    environment:
+      MAX_CONCURRENT_TASKS: "400"
+      WORKER_ID: gpu-worker-4
       GPU_NAME: NVIDIA-H100-SIM-large
   master-1:
     environment:

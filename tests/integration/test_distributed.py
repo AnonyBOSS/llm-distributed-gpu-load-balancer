@@ -68,7 +68,7 @@ def test_prometheus_scrapes_all_targets():
     # All scrape jobs present and healthy.
     assert "lb" in by_job and all(h == "up" for h in by_job["lb"])
     assert "masters" in by_job and all(h == "up" for h in by_job["masters"])
-    assert "workers" in by_job and len(by_job["workers"]) == 3
+    assert "workers" in by_job and len(by_job["workers"]) == 4
     assert all(h == "up" for h in by_job["workers"])
 
 

@@ -1,10 +1,10 @@
 """Benchmark all four LB strategies against heterogeneous workers.
 
-The default compose stack runs three identical workers, so the
+The default compose stack runs four identical workers, so the
 strategy choice barely matters -- round_robin already balances perfectly.
-This script targets the 1:2:8 capacity ratio defined in
-deploy/docker-compose.heterogeneous.yml and shows where capacity-aware
-strategies (load_aware, power_of_two) actually win.
+This script targets the uneven capacities defined in
+deploy/docker-compose.heterogeneous.yml (50 : 100 : 400 : 400 in-flight
+slots) and shows how each strategy spreads load across them.
 
 Bring up the heterogeneous stack first:
 
@@ -58,6 +58,7 @@ def _save_csv(rows: list[RunSummary]) -> Path:
                 "p50_ms",
                 "p95_ms",
                 "p99_ms",
+                "first_attempt_ok",
                 "errors",
                 "worker_dist",
             ]
@@ -71,6 +72,7 @@ def _save_csv(rows: list[RunSummary]) -> Path:
                     round(r.p50_seconds * 1000, 1),
                     round(r.p95_seconds * 1000, 1),
                     round(r.p99_seconds * 1000, 1),
+                    r.first_attempt_ok,
                     r.errors,
                     r.worker_distribution,
                 ]
@@ -100,7 +102,7 @@ def _save_chart(rows: list[RunSummary]) -> None:
 
     ax1.set_xlabel("Concurrent users")
     ax1.set_ylabel("Throughput (req/s)")
-    ax1.set_title("Throughput across LB strategies\n(heterogeneous workers, 1:2:8 capacity)")
+    ax1.set_title("Throughput across LB strategies\n(heterogeneous workers, 50:100:400:400 slots)")
     ax1.legend()
     ax1.grid(True, alpha=0.3)
 

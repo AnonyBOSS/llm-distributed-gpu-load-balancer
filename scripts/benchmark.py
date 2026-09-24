@@ -2,8 +2,12 @@
 
 Runs the request fan-in at multiple concurrency levels (default 100, 250,
 500, 1000) for each LB strategy (round_robin, least_connections,
-load_aware), with an optional fault-injection run that kills a worker
-container mid-flight.
+load_aware, power_of_two), with an optional fault-injection run that
+kills a worker container mid-flight (`docker kill`, i.e. SIGKILL).
+
+The client retries 502/503 and connection errors with backoff, so a run's
+`successful` count is "eventually served". `first_attempt_ok` counts the
+requests the cluster served without any client-side retry.
 
 Outputs into ./benchmarks/:
     raw/{strategy}_{users}_{tag}.json   per-request data per run
@@ -46,6 +50,7 @@ LB_URL = "http://localhost:8080"
 MASTER_URL = "http://localhost:9000"
 PROMETHEUS_URL = "http://localhost:9090"
 FAULT_CONTAINER = "deploy-worker-2-1"
+_fault_at: float | None = None  # wall-clock time of the last injected fault
 
 OUT_DIR = PROJECT_ROOT / "benchmarks"
 RAW_DIR = OUT_DIR / "raw"
@@ -59,6 +64,7 @@ class RequestResult:
     worker_id: str
     latency_seconds: float
     timestamp: float
+    attempts: int = 1
 
 
 @dataclass
@@ -75,6 +81,7 @@ class RunSummary:
     p95_seconds: float
     p99_seconds: float
     worker_distribution: dict[str, int]
+    first_attempt_ok: int = 0
 
 
 def _percentile(sorted_values: Sequence[float], q: float) -> float:
@@ -147,6 +154,7 @@ def _fire_one(client: httpx.Client, i: int) -> RequestResult:
                     worker_id=last_worker,
                     latency_seconds=latency,
                     timestamp=time.time(),
+                    attempts=attempt + 1,
                 )
             if r.status_code in (502, 503) and attempt + 1 < max_attempts:
                 # capacity-related; retry with capped exponential backoff + jitter
@@ -165,18 +173,21 @@ def _fire_one(client: httpx.Client, i: int) -> RequestResult:
         worker_id=last_worker,
         latency_seconds=time.perf_counter() - start,
         timestamp=time.time(),
+        attempts=attempt + 1,
     )
 
 
 def _inject_fault() -> None:
+    # SIGKILL, not `docker stop`: a graceful stop lets uvicorn drain its
+    # in-flight requests, so nothing would ever need to fail over.
     try:
         subprocess.run(
-            ["docker", "stop", FAULT_CONTAINER],
+            ["docker", "kill", FAULT_CONTAINER],
             check=True,
             capture_output=True,
             text=True,
         )
-        print(f"[bench] FAULT injected: stopped {FAULT_CONTAINER}")
+        print(f"[bench] FAULT injected: killed {FAULT_CONTAINER}")
     except subprocess.CalledProcessError as exc:
         print(f"[bench] fault injection failed: {exc.stderr}")
 
@@ -217,6 +228,7 @@ def run_one(
     print(
         f"[bench] === RUN strategy={strategy} users={num_users} " f"fault_after={fault_after} ==="
     )
+    global _fault_at
     _set_strategy(strategy)
 
     results: list[RequestResult] = []
@@ -230,6 +242,7 @@ def run_one(
             for fut in as_completed(futures):
                 results.append(fut.result())
                 if fault_after is not None and not fault_triggered and len(results) >= fault_after:
+                    _fault_at = time.time()
                     _inject_fault()
                     fault_triggered = True
             elapsed = time.perf_counter() - t0
@@ -256,12 +269,14 @@ def run_one(
         p95_seconds=_percentile(latencies, 0.95),
         p99_seconds=_percentile(latencies, 0.99),
         worker_distribution=worker_dist,
+        first_attempt_ok=sum(1 for r in ok_results if r.attempts == 1),
     )
 
     print(
         f"[bench] DONE elapsed={summary.elapsed_seconds:.2f}s "
         f"throughput={summary.throughput_rps:.1f} rps "
         f"ok={summary.successful}/{num_users} "
+        f"first_try={summary.first_attempt_ok}/{num_users} "
         f"errors={summary.errors} "
         f"p50={summary.p50_seconds * 1000:.0f}ms "
         f"p95={summary.p95_seconds * 1000:.0f}ms "
@@ -291,6 +306,7 @@ def _save_csv(rows: list[RunSummary], filename: str = "results.csv") -> Path:
                 "elapsed_sec",
                 "throughput_rps",
                 "successful",
+                "first_attempt_ok",
                 "errors",
                 "error_rate",
                 "p50_ms",
@@ -308,6 +324,7 @@ def _save_csv(rows: list[RunSummary], filename: str = "results.csv") -> Path:
                     round(r.elapsed_seconds, 3),
                     round(r.throughput_rps, 2),
                     r.successful,
+                    r.first_attempt_ok,
                     r.errors,
                     round(r.error_rate, 4),
                     round(r.p50_seconds * 1000, 1),
@@ -432,35 +449,29 @@ def _draw_charts(rows: list[RunSummary], fault_results: list[RequestResult] | No
     plt.savefig(CHARTS_DIR / "worker_distribution.png", dpi=120)
     plt.close()
 
-    # 4. Recovery curve from the fault run, if available.
+    # 4. Failover during the fault run: cumulative responses served by each
+    # worker over time. The killed worker's line stops at the kill; the
+    # others absorb its share.
     if fault_results:
-        sorted_results = sorted(fault_results, key=lambda r: r.timestamp)
-        t0 = sorted_results[0].timestamp
-        # Bin into 0.5s windows; per-bin error rate.
-        bin_width = 0.5
-        if not sorted_results:
+        ok = sorted((r for r in fault_results if r.status_code == 200), key=lambda r: r.timestamp)
+        if not ok:
             return
-        max_offset = sorted_results[-1].timestamp - t0
-        bins = [
-            (i * bin_width, (i + 1) * bin_width) for i in range(int(max_offset / bin_width) + 1)
-        ]
-        bin_rates = []
-        bin_centers = []
-        for lo, hi in bins:
-            window = [r for r in sorted_results if lo <= (r.timestamp - t0) < hi]
-            if not window:
-                continue
-            errors = sum(1 for r in window if r.status_code != 200)
-            bin_rates.append(errors / len(window))
-            bin_centers.append((lo + hi) / 2)
-
-        plt.figure(figsize=(9, 4))
-        plt.plot(bin_centers, [r * 100 for r in bin_rates], marker="o")
-        plt.xlabel("Wall-clock seconds since first request")
-        plt.ylabel("Error rate per 0.5s bin (%)")
-        plt.title("Error rate during fault-injection run (worker-2 stopped mid-flight)")
-        plt.ylim(0, max(5, max((r * 100 for r in bin_rates), default=5) * 1.2))
+        t0 = min(r.timestamp - r.latency_seconds for r in fault_results)
+        plt.figure(figsize=(9, 4.5))
+        for w in sorted({r.worker_id for r in ok}):
+            ts = [r.timestamp - t0 for r in ok if r.worker_id == w]
+            plt.step(ts, range(1, len(ts) + 1), where="post", label=w)
+        if _fault_at is not None:
+            plt.axvline(_fault_at - t0, color="red", linestyle="--", label="worker-2 killed")
+        failed = len(fault_results) - len(ok)
+        plt.xlabel("Seconds since first request")
+        plt.ylabel("Responses served (cumulative)")
+        plt.title(
+            f"Failover after SIGKILL of worker-2 at {len(fault_results)} users "
+            f"({len(ok)} served, {failed} failed)"
+        )
         plt.grid(True, alpha=0.3)
+        plt.legend()
         plt.tight_layout()
         plt.savefig(CHARTS_DIR / "recovery_after_fault.png", dpi=120)
         plt.close()
@@ -677,6 +688,7 @@ def main() -> None:
             f"  {r.strategy:18} users={r.users:5d} "
             f"throughput={r.throughput_rps:6.1f} rps "
             f"p99={r.p99_seconds * 1000:6.0f}ms "
+            f"first_try={r.first_attempt_ok}/{r.users} "
             f"errors={r.errors}{suffix}"
         )
 

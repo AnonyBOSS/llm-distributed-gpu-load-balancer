@@ -23,11 +23,11 @@ services:
     environment:
       WORKER_ID: gpu-worker-1
       GPU_NAME: NVIDIA-A100-SIM
-      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # Sized for the brief's 1000-user benchmark: 4 workers x 400 = 1600
       # in-flight slots. Sim backend's time.sleep() releases the GIL so
       # holding many in-flight is essentially free. Self-shedding still
-      # kicks in past 1200 (real overload). The GPU compose override sets
-      # this to 2 because real GPU inference doesn't parallelise the way
+      # kicks in past 1600 (real overload). The GPU compose override sets
+      # this to 4 because real GPU inference doesn't parallelise the way
       # sim sleeps do.
       MAX_CONCURRENT_TASKS: "400"
       FAILURE_RATE: "0.0"
@@ -48,11 +48,11 @@ services:
     environment:
       WORKER_ID: gpu-worker-2
       GPU_NAME: NVIDIA-A100-SIM
-      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # Sized for the brief's 1000-user benchmark: 4 workers x 400 = 1600
       # in-flight slots. Sim backend's time.sleep() releases the GIL so
       # holding many in-flight is essentially free. Self-shedding still
-      # kicks in past 1200 (real overload). The GPU compose override sets
-      # this to 2 because real GPU inference doesn't parallelise the way
+      # kicks in past 1600 (real overload). The GPU compose override sets
+      # this to 4 because real GPU inference doesn't parallelise the way
       # sim sleeps do.
       MAX_CONCURRENT_TASKS: "400"
       FAILURE_RATE: "0.0"
@@ -73,11 +73,11 @@ services:
     environment:
       WORKER_ID: gpu-worker-3
       GPU_NAME: NVIDIA-A100-SIM
-      # Sized for the brief's 1000-user benchmark: 3 workers x 400 = 1200
+      # Sized for the brief's 1000-user benchmark: 4 workers x 400 = 1600
       # in-flight slots. Sim backend's time.sleep() releases the GIL so
       # holding many in-flight is essentially free. Self-shedding still
-      # kicks in past 1200 (real overload). The GPU compose override sets
-      # this to 2 because real GPU inference doesn't parallelise the way
+      # kicks in past 1600 (real overload). The GPU compose override sets
+      # this to 4 because real GPU inference doesn't parallelise the way
       # sim sleeps do.
       MAX_CONCURRENT_TASKS: "400"
       FAILURE_RATE: "0.0"

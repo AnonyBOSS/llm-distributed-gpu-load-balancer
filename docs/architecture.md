@@ -3,15 +3,15 @@
 ## Topology
 
 ```
-client  →  nginx (8080)  →  lb (7000)  →  master (9000)  →  worker-{1,2,3} (8000)
-                                              │                       ▲
-                                              │  active health probes │
-                                              └───────────────────────┘
+client  →  nginx (8080)  →  lb (7000)  ──┬──→  master-1 (9000)  ──┬──→  worker-{1,2,3,4} (8000)
+                                         └──→  master-2 (9001)  ──┘         ▲
+                                                   │   active health probes  │
+                                                   └─────────────────────────┘
                             ↓
                    prometheus (9090) ──→ grafana (3000)
 ```
 
-Eight processes, each its own container. Communication is JSON over HTTP.
+Ten containers: nginx, the LB, two masters, four workers, Prometheus, and Grafana. Communication is JSON over HTTP.
 
 ## Components
 
@@ -28,7 +28,7 @@ Eight processes, each its own container. Communication is JSON over HTTP.
 
 1. Client POSTs `/request` to nginx (port 8080).
 2. nginx forwards to the LB service (port 7000) via `least_conn`.
-3. The LB service applies its configured strategy (default `round_robin`) to choose a master. With one master in the demo this is degenerate; with multiple masters it would distribute load.
+3. The LB service applies its configured strategy (default `round_robin`) to choose one of the two masters. Masters are stateless, so either can serve any request; if one returns a transient error, the LB retries on the other.
 4. The chosen master receives the request, runs RAG retrieval against its in-memory FAISS index (or stub), then asks its inner `LoadBalancer` (default `load_aware`) which **worker** to send it to.
 5. `LoadBalancer.select_worker()` is lock-protected and atomically reserves the chosen worker's `pending_tasks` counter — the fix for the original thundering-herd bug.
 6. The master forwards the request to the worker over HTTP via a `RemoteWorkerProxy`. The proxy duck-types as a `GPUWorkerNode`, so the existing `MasterScheduler` retry loop works without modification.
@@ -112,9 +112,9 @@ Combining them is robust against any *one* of these failing, which is the proper
 
 ### Strategy choice for heterogeneous workers
 
-In the homogeneous default compose (3 workers × 8 slots each), all four strategies converge — every worker is identical, so any selection rule produces near-uniform load. The strategies *only* differentiate themselves when workers differ. The heterogeneous benchmark ([scripts/heterogeneous_bench.py](../scripts/heterogeneous_bench.py), with [deploy/docker-compose.heterogeneous.yml](../deploy/docker-compose.heterogeneous.yml) at 1 : 2 : 8 capacity ratio) is what surfaces:
+In the homogeneous default compose (4 workers × 400 slots each), all four strategies converge — every worker is identical, so any selection rule produces near-uniform load. The strategies *only* differentiate themselves when workers differ. The heterogeneous benchmark ([scripts/heterogeneous_bench.py](../scripts/heterogeneous_bench.py), with [deploy/docker-compose.heterogeneous.yml](../deploy/docker-compose.heterogeneous.yml) at 50 : 100 : 400 : 400 slots) is what surfaces:
 
-- `round_robin` ignores capacity entirely → systematic overload of the small worker.
+- `round_robin` ignores capacity entirely → the small workers keep filling up, and requests only get through because a full worker rejects with 503 and the master falls over to another.
 - `least_connections` ignores capacity → same problem.
 - `load_aware` (Reiss et al., SoCC '12) divides queue depth by capacity → tracks the actual loadable amount.
 - `power_of_two` (Mitzenmacher 2001) gets close to global least-loaded with O(1) state per request — important when the worker pool is large enough that scanning all of them is itself a bottleneck.
